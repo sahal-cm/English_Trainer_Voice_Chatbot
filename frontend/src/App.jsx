@@ -22,17 +22,37 @@ function App() {
         audioChunksRef.current.push(event.data);
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, {
           type: "audio/webm",
         });
 
-        console.log("Recording completed:", audioBlob);
-        console.log("Audio size:", audioBlob.size, "bytes");
-
         stream.getTracks().forEach((track) => track.stop());
 
-        setStatus("Recording completed");
+        setStatus("Uploading audio...");
+
+        const formData = new FormData();
+
+        formData.append("file", audioBlob, "recording.webm");
+
+        try {
+          const response = await fetch(
+            "http://127.0.0.1:8000/api/upload-audio",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          const data = await response.json();
+
+          console.log("Backend response:", data);
+
+          setStatus(data.message);
+        } catch (error) {
+          console.error("Upload error:", error);
+          setStatus("Failed to upload audio");
+        }
       };
 
       mediaRecorder.start();
@@ -70,9 +90,7 @@ function App() {
 
         <div>
           <p>You</p>
-          <div>
-            It was good. I worked on my project.
-          </div>
+          <div>It was good. I worked on my project.</div>
         </div>
 
         <p style={{ textAlign: "center" }}>{status}</p>
