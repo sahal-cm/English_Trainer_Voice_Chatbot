@@ -1,24 +1,37 @@
-import { useEffect, useState } from "react";
-
 function App() {
-  const [message, setMessage] = useState("Connecting to backend...");
-
-  useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/test")
-      .then((response) => response.json())
-      .then((data) => {
-        setMessage(data.message);
-      })
-      .catch((error) => {
-        console.error("Backend connection error:", error);
-        setMessage("Could not connect to backend.");
-      });
-  }, []);
-
   return (
     <div>
-      <h1>AI English Voice Trainer</h1>
-      <p>Backend says: {message}</p>
+      <header>
+        <h1>🗣️ AI English Coach</h1>
+        <span>● Online</span>
+      </header>
+
+      <main>
+        <h2>Daily Conversation</h2>
+
+        <div>
+          <p>AI</p>
+          <div>
+            Hi! How was your day?
+          </div>
+        </div>
+
+        <div>
+          <p>You</p>
+          <div>
+            It was good. I worked on my project.
+          </div>
+        </div>
+
+        <button>
+          🎤 Start Speaking
+        </button>
+      </main>
+
+      <footer>
+        <span>Mode: Daily Conversation</span>
+        <span>Level: Intermediate</span>
+      </footer>
     </div>
   );
 }
