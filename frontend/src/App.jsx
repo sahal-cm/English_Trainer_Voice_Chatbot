@@ -5,6 +5,8 @@ function App() {
   const [status, setStatus] = useState("Ready to speak");
   const [transcription, setTranscription] = useState("");
   const [speechAnalysis, setSpeechAnalysis] = useState(null);
+  const [fluencyScore, setFluencyScore] = useState(null);
+  const [grammarAnalysis, setGrammarAnalysis] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -52,6 +54,8 @@ function App() {
 
           setTranscription(data.transcription);
           setSpeechAnalysis(data.speech_analysis);
+          setFluencyScore(data.fluency_score);
+          setGrammarAnalysis(data.grammar_analysis);
           setStatus("Analysis complete!");
 
         } catch (error) {
@@ -94,14 +98,40 @@ function App() {
         </div>
 
         <div>
-          <p>You</p>
-          <div>
+          <p Align="right">You</p>
+          <div Align="right">
             {transcription || "Your transcription will appear here..."}
-          </div>
+          </div> <br />
+
+          {grammarAnalysis && (
+            <div className="analysis-section">
+              <h2>Grammar Analysis</h2>
+
+              <p>
+              <strong>Original:</strong>{" "}
+              {grammarAnalysis.original}
+              </p>
+
+              <p>
+              <strong>Corrected:</strong>{" "}
+              {grammarAnalysis.corrected}
+              </p>
+
+              <p>
+                <strong>Grammar Issues:</strong>{" "}
+                {grammarAnalysis.has_errors ? "Found" : "None"}
+              </p>
+            </div>
+          )}
 
           {speechAnalysis && (
             <div>
-              <h3>Speech Analysis</h3>
+              <h3>Speech Analysis</h3><br/>
+
+              <h4>Fluency Score</h4>
+              <p>
+                {fluencyScore !== null ? `${fluencyScore}/100` : "--"}
+              </p><br/>
 
               <p>
                 Words: {speechAnalysis.word_count}
@@ -136,7 +166,7 @@ function App() {
               <p>
                 Longest Pause: {speechAnalysis.longest_pause_seconds}s
               </p>
-              
+
             </div>
           )}
 
