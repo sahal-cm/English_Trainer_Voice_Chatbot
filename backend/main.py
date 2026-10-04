@@ -18,7 +18,7 @@ app.add_middleware(
 
 # Load Whisper once when the server starts
 print("Loading Whisper model...")
-model = whisper.load_model("tiny")
+model = whisper.load_model("base")
 print("Whisper model loaded!")
 
 
@@ -58,7 +58,10 @@ async def upload_audio(file: UploadFile = File(...)):
 
         duration = result["segments"][-1]["end"] if result["segments"] else 0
 
-        speech_analysis = analyze_speech(transcription, duration)
+        speech_analysis = analyze_speech(
+            transcription, 
+            duration,
+            result["segments"])
 
     finally:
         # Delete temporary audio file

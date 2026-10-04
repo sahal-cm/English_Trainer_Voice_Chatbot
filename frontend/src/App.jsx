@@ -124,6 +124,19 @@ function App() {
                 ? `Detected: ${speechAnalysis.filler_words.join(", ")}`
                 : "No filler words detected"}
               </p>
+
+              <p>
+                Pauses: {speechAnalysis.pause_count}
+              </p>
+
+              <p>
+                Total Pause Time: {speechAnalysis.total_pause_seconds}s
+              </p>
+
+              <p>
+                Longest Pause: {speechAnalysis.longest_pause_seconds}s
+              </p>
+              
             </div>
           )}
 
