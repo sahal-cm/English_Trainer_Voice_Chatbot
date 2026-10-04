@@ -97,7 +97,7 @@ function App() {
           <div>Hi! How was your day?</div>
         </div>
 
-        <div>
+         <div>
           <p Align="right">You</p>
           <div Align="right">
             {transcription || "Your transcription will appear here..."}
@@ -106,6 +106,11 @@ function App() {
           {grammarAnalysis && (
             <div className="analysis-section">
               <h2>Grammar Analysis</h2>
+
+              <p>
+                <strong>Grammar Score:</strong>{" "}
+                {grammarAnalysis.grammar_score}/100
+              </p>
 
               <p>
               <strong>Original:</strong>{" "}
@@ -121,8 +126,25 @@ function App() {
                 <strong>Grammar Issues:</strong>{" "}
                 {grammarAnalysis.has_errors ? "Found" : "None"}
               </p>
+
+              {grammarAnalysis.changes.length > 0 && (
+                <div>
+                  <strong>Detected Changes:</strong>
+
+                  <ul>
+                    {grammarAnalysis.changes.map((change, index) => (
+                      <li key={index}>
+                        "{change.original}" → "{change.corrected}"
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
             </div>
           )}
+
+          
 
           {speechAnalysis && (
             <div>
