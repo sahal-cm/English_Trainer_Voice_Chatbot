@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from speech_analysis import analyze_speech
 import whisper
 import tempfile
 import os
@@ -55,15 +56,20 @@ async def upload_audio(file: UploadFile = File(...)):
 
         transcription = result["text"].strip()
 
+        duration = result["segments"][-1]["end"] if result["segments"] else 0
+
+        speech_analysis = analyze_speech(transcription, duration)
+
     finally:
         # Delete temporary audio file
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
     return {
-        "message": "Audio transcribed successfully!",
+        "message": "Audio analyzed successfully!",
         "filename": file.filename,
         "transcription": transcription,
+        "speech_analysis": speech_analysis,
     }
 
 

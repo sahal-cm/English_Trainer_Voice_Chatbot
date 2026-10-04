@@ -4,6 +4,7 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState("Ready to speak");
   const [transcription, setTranscription] = useState("");
+  const [speechAnalysis, setSpeechAnalysis] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -50,7 +51,9 @@ function App() {
           console.log("Backend response:", data);
 
           setTranscription(data.transcription);
-          setStatus("Transcription complete!");
+          setSpeechAnalysis(data.speech_analysis);
+          setStatus("Analysis complete!");
+
         } catch (error) {
           console.error("Upload error:", error);
           setStatus("Failed to upload audio");
@@ -95,6 +98,35 @@ function App() {
           <div>
             {transcription || "Your transcription will appear here..."}
           </div>
+
+          {speechAnalysis && (
+            <div>
+              <h3>Speech Analysis</h3>
+
+              <p>
+                Words: {speechAnalysis.word_count}
+              </p>
+
+              <p>
+                Duration: {speechAnalysis.duration_seconds}s
+              </p>
+
+              <p>
+                Speaking Rate: {speechAnalysis.speaking_rate_wpm} WPM
+              </p>
+
+              <p>
+                Filler Words: {speechAnalysis.filler_word_count}
+              </p>
+
+              <p>
+                {speechAnalysis.filler_words.length > 0
+                ? `Detected: ${speechAnalysis.filler_words.join(", ")}`
+                : "No filler words detected"}
+              </p>
+            </div>
+          )}
+
         </div>
 
         <p style={{ textAlign: "center" }}>{status}</p>
