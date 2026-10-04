@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState("Ready to speak");
+  const [transcription, setTranscription] = useState("");
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -48,7 +49,8 @@ function App() {
 
           console.log("Backend response:", data);
 
-          setStatus(data.message);
+          setTranscription(data.transcription);
+          setStatus("Transcription complete!");
         } catch (error) {
           console.error("Upload error:", error);
           setStatus("Failed to upload audio");
@@ -90,7 +92,9 @@ function App() {
 
         <div>
           <p>You</p>
-          <div>It was good. I worked on my project.</div>
+          <div>
+            {transcription || "Your transcription will appear here..."}
+          </div>
         </div>
 
         <p style={{ textAlign: "center" }}>{status}</p>
