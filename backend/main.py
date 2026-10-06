@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from speech_analysis import analyze_speech
 from scoring import calculate_fluency_score
 from grammar_analysis import analyze_grammar
+from communication_score import calculate_communication_score
 
 import whisper
 import tempfile
@@ -71,6 +72,10 @@ async def upload_audio(file: UploadFile = File(...)):
 
         grammar_analysis = analyze_grammar(transcription)
 
+        communication_score = calculate_communication_score(
+            fluency_score,
+            grammar_analysis["grammar_score"])
+
     finally:
         # Delete temporary audio file
         if os.path.exists(temp_path):
@@ -83,6 +88,7 @@ async def upload_audio(file: UploadFile = File(...)):
         "speech_analysis": speech_analysis,
         "fluency_score": fluency_score,
         "grammar_analysis": grammar_analysis,
+        "communication_score": communication_score,
     }
 
 

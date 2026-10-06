@@ -7,6 +7,7 @@ function App() {
   const [speechAnalysis, setSpeechAnalysis] = useState(null);
   const [fluencyScore, setFluencyScore] = useState(null);
   const [grammarAnalysis, setGrammarAnalysis] = useState(null);
+  const [communicationScore, setCommunicationScore] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -56,6 +57,7 @@ function App() {
           setSpeechAnalysis(data.speech_analysis);
           setFluencyScore(data.fluency_score);
           setGrammarAnalysis(data.grammar_analysis);
+          setCommunicationScore(data.communication_score);
           setStatus("Analysis complete!");
 
         } catch (error) {
@@ -98,10 +100,20 @@ function App() {
         </div>
 
          <div>
-          <p Align="right">You</p>
-          <div Align="right">
+          <p>You</p>
+          <div>
             {transcription || "Your transcription will appear here..."}
           </div> <br />
+
+          {communicationScore !== null && (
+            <div className="analysis-section">
+              <h2>Overall Communication Score</h2>
+
+              <p>
+                <strong>{communicationScore}/100</strong>
+              </p>
+            </div>
+          )}
 
           {grammarAnalysis && (
             <div className="analysis-section">
