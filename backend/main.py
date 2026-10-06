@@ -5,6 +5,7 @@ from speech_analysis import analyze_speech
 from scoring import calculate_fluency_score
 from grammar_analysis import analyze_grammar
 from communication_score import calculate_communication_score
+from conversation import generate_response
 
 import whisper
 import tempfile
@@ -91,4 +92,17 @@ async def upload_audio(file: UploadFile = File(...)):
         "communication_score": communication_score,
     }
 
+
+
+@app.post("/api/conversation")
+async def conversation(data: dict):
+    user_text = data.get("text", "")
+    turn = data.get("turn", 1)
+
+    response = generate_response(user_text, turn)
+
+    return {
+        "response": response,
+        "turn": turn
+    }
 

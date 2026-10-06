@@ -8,6 +8,14 @@ function App() {
   const [fluencyScore, setFluencyScore] = useState(null);
   const [grammarAnalysis, setGrammarAnalysis] = useState(null);
   const [communicationScore, setCommunicationScore] = useState(null);
+  const [aiMessage, setAiMessage] = useState("Hi! How was your day?");
+  const [turn, setTurn] = useState(1);
+  const [conversation, setConversation] = useState([
+    {
+      role: "ai",
+      text: "Hi! How was your day?",
+    },
+  ]);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -54,10 +62,45 @@ function App() {
           console.log("Backend response:", data);
 
           setTranscription(data.transcription);
+          setConversation((prev) => [
+            ...prev,
+            {
+              role: "user",
+              text: data.transcription,
+            },
+          ]);
           setSpeechAnalysis(data.speech_analysis);
           setFluencyScore(data.fluency_score);
           setGrammarAnalysis(data.grammar_analysis);
           setCommunicationScore(data.communication_score);
+
+          const conversationResponse = await fetch(
+            "http://127.0.0.1:8000/api/conversation",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                text: data.transcription,
+                turn: turn,
+              }),
+            }
+          );
+
+          const conversationData = await conversationResponse.json();
+
+          setAiMessage(conversationData.response);
+          setTurn(turn + 1);
+
+          setConversation((prev) => [
+            ...prev,
+            {
+              role: "ai",
+              text: conversationData.response,
+            },
+          ]);
+
           setStatus("Analysis complete!");
 
         } catch (error) {
@@ -94,16 +137,17 @@ function App() {
       <main>
         <h2>Daily Conversation</h2>
 
-        <div>
-          <p>AI</p>
-          <div>Hi! How was your day?</div>
-        </div>
+        
+          {conversation.map((message, index) => (
+            <div key={index}>
+              <p>{message.role === "ai" ? "AI" : "You"}</p>
+              <div>{message.text}</div>
+              <br />
+            </div>
+          ))}
+        
 
-         <div>
-          <p>You</p>
-          <div>
-            {transcription || "Your transcription will appear here..."}
-          </div> <br />
+        <div>
 
           {communicationScore !== null && (
             <div className="analysis-section">
