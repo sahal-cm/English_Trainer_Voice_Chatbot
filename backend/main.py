@@ -97,12 +97,13 @@ async def upload_audio(file: UploadFile = File(...)):
 @app.post("/api/conversation")
 async def conversation(data: dict):
     user_text = data.get("text", "")
-    turn = data.get("turn", 1)
+    history = data.get("history", [])
 
-    response = generate_response(user_text, turn)
+    response = generate_response(
+        user_text,
+        history
+    )
 
     return {
-        "response": response,
-        "turn": turn
+        "response": response
     }
-

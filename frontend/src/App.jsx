@@ -9,7 +9,6 @@ function App() {
   const [grammarAnalysis, setGrammarAnalysis] = useState(null);
   const [communicationScore, setCommunicationScore] = useState(null);
   const [aiMessage, setAiMessage] = useState("Hi! How was your day?");
-  const [turn, setTurn] = useState(1);
   const [conversation, setConversation] = useState([
     {
       role: "ai",
@@ -74,6 +73,14 @@ function App() {
           setGrammarAnalysis(data.grammar_analysis);
           setCommunicationScore(data.communication_score);
 
+          const conversationHistory = [
+            ...conversation,
+            {
+              role: "user",
+              text: data.transcription,
+            },
+          ];
+
           const conversationResponse = await fetch(
             "http://127.0.0.1:8000/api/conversation",
             {
@@ -83,7 +90,7 @@ function App() {
               },
               body: JSON.stringify({
                 text: data.transcription,
-                turn: turn,
+                history: conversationHistory,
               }),
             }
           );
@@ -91,7 +98,7 @@ function App() {
           const conversationData = await conversationResponse.json();
 
           setAiMessage(conversationData.response);
-          setTurn(turn + 1);
+
 
           setConversation((prev) => [
             ...prev,
