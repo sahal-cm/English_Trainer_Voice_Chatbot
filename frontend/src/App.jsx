@@ -18,6 +18,26 @@ function App() {
   const [typedMessage, setTypedMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
+  const startNewConversation = () => {
+    if (isRecording || isSending) return;
+
+    setConversation([
+      {
+        role: "ai",
+        text: "Hi! How was your day?",
+      },
+    ]);
+
+    setTranscription("");
+    setSpeechAnalysis(null);
+    setFluencyScore(null);
+    setGrammarAnalysis(null);
+    setCommunicationScore(null);
+    setAiMessage("Hi! How was your day?");
+    setTypedMessage("");
+    setStatus("Ready to speak");
+  };
+
   const sendTypedMessage = async (event) => { 
     event.preventDefault(); 
     
@@ -36,40 +56,40 @@ function App() {
     setStatus("AI is thinking..."); 
     
     try { 
-      const response = await fetch( 
-        "http://127.0.0.1:8000/api/conversation", 
-        { 
-          method: "POST", 
-          headers: { 
-            "Content-Type": "application/json", 
-          }, 
-          body: JSON.stringify({ 
-            text, history: updatedHistory, 
-          }), 
-        } 
-      ); 
+        const response = await fetch( 
+          "http://127.0.0.1:8000/api/conversation", 
+          { 
+            method: "POST", 
+            headers: { 
+              "Content-Type": "application/json", 
+            }, 
+            body: JSON.stringify({ 
+              text, history: updatedHistory, 
+            }), 
+          } 
+        ); 
       
-      if (!response.ok) {   
-      throw new Error("Failed to get AI response"); 
+        if (!response.ok) {   
+          throw new Error("Failed to get AI response"); 
+        } 
+    
+      const data = await response.json(); 
+    
+      setAiMessage(data.response); 
+    
+      setConversation((prev) => [ 
+        ...prev, 
+        { role: "ai", text: data.response }, 
+      ]); 
+    
+      setStatus("Ready to speak or type"); 
+    } catch (error) { 
+      console.error("Conversation error:", error); 
+      setStatus("Failed to get AI response. Please try again."); 
+    } finally { 
+      setIsSending(false); 
     } 
-    
-    const data = await response.json(); 
-    
-    setAiMessage(data.response); 
-    
-    setConversation((prev) => [ 
-      ...prev, 
-      { role: "ai", text: data.response }, 
-    ]); 
-    
-    setStatus("Ready to speak or type"); 
-  } catch (error) { 
-    console.error("Conversation error:", error); 
-    setStatus("Failed to get AI response. Please try again."); 
-  } finally { 
-    setIsSending(false); 
-  } 
-};
+  };
 
 
   const mediaRecorderRef = useRef(null);
@@ -199,6 +219,13 @@ function App() {
 
       <main>
         <h2>Daily Conversation</h2>
+
+        <button
+          onClick={startNewConversation}
+          disabled={isRecording || isSending}
+        >
+          + New Conversation
+        </button>
 
         
           {conversation.map((message, index) => (
