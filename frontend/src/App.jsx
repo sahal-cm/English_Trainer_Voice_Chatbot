@@ -15,6 +15,62 @@ function App() {
       text: "Hi! How was your day?",
     },
   ]);
+  const [typedMessage, setTypedMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
+
+  const sendTypedMessage = async (event) => { 
+    event.preventDefault(); 
+    
+    const text = typedMessage.trim(); 
+    
+    if (!text || isSending) return; 
+    
+    const updatedHistory = [ 
+      ...conversation, 
+      { role: "user", text }, 
+    ]; 
+    
+    setConversation(updatedHistory); 
+    setTypedMessage(""); 
+    setIsSending(true); 
+    setStatus("AI is thinking..."); 
+    
+    try { 
+      const response = await fetch( 
+        "http://127.0.0.1:8000/api/conversation", 
+        { 
+          method: "POST", 
+          headers: { 
+            "Content-Type": "application/json", 
+          }, 
+          body: JSON.stringify({ 
+            text, history: updatedHistory, 
+          }), 
+        } 
+      ); 
+      
+      if (!response.ok) {   
+      throw new Error("Failed to get AI response"); 
+    } 
+    
+    const data = await response.json(); 
+    
+    setAiMessage(data.response); 
+    
+    setConversation((prev) => [ 
+      ...prev, 
+      { role: "ai", text: data.response }, 
+    ]); 
+    
+    setStatus("Ready to speak or type"); 
+  } catch (error) { 
+    console.error("Conversation error:", error); 
+    setStatus("Failed to get AI response. Please try again."); 
+  } finally { 
+    setIsSending(false); 
+  } 
+};
+
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -258,6 +314,29 @@ function App() {
         </div>
 
         <p style={{ textAlign: "center" }}>{status}</p>
+
+        <form onSubmit={sendTypedMessage}> 
+          <input 
+            type="text"  
+            value={typedMessage} 
+            onChange={(event) => setTypedMessage(event.target.value)} 
+            placeholder="Type your message here..." 
+            disabled={isSending || isRecording} 
+            style={{ 
+              padding: "10px", 
+              width: "70%", 
+              marginRight: "8px", 
+              }} 
+          /> 
+          
+          <button 
+            type="submit" 
+            disabled={!typedMessage.trim() || isSending || isRecording} 
+          > 
+            {isSending ? "Thinking..." : "Send"} 
+          </button>   
+        </form> 
+        <br />
 
         {!isRecording ? (
           <button onClick={startRecording}>
