@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 
 function App() {
@@ -10,24 +11,23 @@ function App() {
   const [communicationScore, setCommunicationScore] = useState(null);
   const [aiMessage, setAiMessage] = useState("Hi! How was your day?");
   const [conversation, setConversation] = useState([
-    {
-      role: "ai",
-      text: "Hi! How was your day?",
-    },
+    { role: "ai", text: "Hi! How was your day?" },
   ]);
   const [typedMessage, setTypedMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+
+  // UI controls
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   const startNewConversation = () => {
-    if (isRecording || isSending) return;
+    if (isRecording || isSending || isProcessingAudio) return;
 
-    setConversation([
-      {
-        role: "ai",
-        text: "Hi! How was your day?",
-      },
-    ]);
-
+    setConversation([{ role: "ai", text: "Hi! How was your day?" }]);
     setTranscription("");
     setSpeechAnalysis(null);
     setFluencyScore(null);
@@ -35,74 +35,66 @@ function App() {
     setCommunicationScore(null);
     setAiMessage("Hi! How was your day?");
     setTypedMessage("");
-    setStatus("Ready to speak");
+    setStatus("Ready to speak or type");
+    setIsSidebarOpen(false);
+    setIsAnalysisOpen(false);
   };
 
-  const sendTypedMessage = async (event) => { 
-    event.preventDefault(); 
-    
-    const text = typedMessage.trim(); 
-    
-    if (!text || isSending) return; 
-    
-    const updatedHistory = [ 
-      ...conversation, 
-      { role: "user", text }, 
-    ]; 
-    
-    setConversation(updatedHistory); 
-    setTypedMessage(""); 
-    setIsSending(true); 
-    setStatus("AI is thinking..."); 
-    
-    try { 
-        const response = await fetch( 
-          "http://127.0.0.1:8000/api/conversation", 
-          { 
-            method: "POST", 
-            headers: { 
-              "Content-Type": "application/json", 
-            }, 
-            body: JSON.stringify({ 
-              text, history: updatedHistory, 
-            }), 
-          } 
-        ); 
-      
-        if (!response.ok) {   
-          throw new Error("Failed to get AI response"); 
-        } 
-    
-      const data = await response.json(); 
-    
-      setAiMessage(data.response); 
-    
-      setConversation((prev) => [ 
-        ...prev, 
-        { role: "ai", text: data.response }, 
-      ]); 
-    
-      setStatus("Ready to speak or type"); 
-    } catch (error) { 
-      console.error("Conversation error:", error); 
-      setStatus("Failed to get AI response. Please try again."); 
-    } finally { 
-      setIsSending(false); 
-    } 
+  const sendTypedMessage = async (event) => {
+    event.preventDefault();
+
+    const text = typedMessage.trim();
+    if (!text || isSending || isRecording || isProcessingAudio) return;
+
+    const updatedHistory = [...conversation, { role: "user", text }];
+
+    setConversation(updatedHistory);
+    setTypedMessage("");
+    setIsSending(true);
+    setStatus("AI is thinking...");
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/conversation",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, history: updatedHistory }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to get AI response");
+      }
+
+      const data = await response.json();
+      setAiMessage(data.response);
+
+      setConversation((prev) => [
+        ...prev,
+        { role: "ai", text: data.response },
+      ]);
+
+      setStatus("Ready to speak or type");
+    } catch (error) {
+      console.error("Conversation error:", error);
+      setStatus("Failed to get AI response. Please try again.");
+    } finally {
+      setIsSending(false);
+    }
   };
-
-
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
 
   const startRecording = async () => {
+    if (isSending || isProcessingAudio || isRecording) return;
+
+    setIsProcessingAudio(true);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
 
       const mediaRecorder = new MediaRecorder(stream);
-
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -116,11 +108,9 @@ function App() {
         });
 
         stream.getTracks().forEach((track) => track.stop());
-
         setStatus("Uploading audio...");
 
         const formData = new FormData();
-
         formData.append("file", audioBlob, "recording.webm");
 
         try {
@@ -132,18 +122,14 @@ function App() {
             }
           );
 
-          const data = await response.json();
+          if (!response.ok) {
+            throw new Error("Failed to upload audio");
+          }
 
+          const data = await response.json();
           console.log("Backend response:", data);
 
           setTranscription(data.transcription);
-          setConversation((prev) => [
-            ...prev,
-            {
-              role: "user",
-              text: data.transcription,
-            },
-          ]);
           setSpeechAnalysis(data.speech_analysis);
           setFluencyScore(data.fluency_score);
           setGrammarAnalysis(data.grammar_analysis);
@@ -151,19 +137,21 @@ function App() {
 
           const conversationHistory = [
             ...conversation,
-            {
-              role: "user",
-              text: data.transcription,
-            },
+            { role: "user", text: data.transcription },
           ];
+
+          setConversation((prev) => [
+            ...prev,
+            { role: "user", text: data.transcription },
+          ]);
+
+          setStatus("Getting AI response...");
 
           const conversationResponse = await fetch(
             "http://127.0.0.1:8000/api/conversation",
             {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 text: data.transcription,
                 history: conversationHistory,
@@ -171,215 +159,455 @@ function App() {
             }
           );
 
+          if (!conversationResponse.ok) {
+            throw new Error("Failed to get AI response");
+          }
+
           const conversationData = await conversationResponse.json();
-
           setAiMessage(conversationData.response);
-
 
           setConversation((prev) => [
             ...prev,
-            {
-              role: "ai",
-              text: conversationData.response,
-            },
+            { role: "ai", text: conversationData.response },
           ]);
 
           setStatus("Analysis complete!");
-
         } catch (error) {
-          console.error("Upload error:", error);
-          setStatus("Failed to upload audio");
+          console.error("Audio processing error:", error);
+          setStatus("Audio processing failed. Please try again.");
+        } finally {
+          setIsProcessingAudio(false);
         }
       };
 
       mediaRecorder.start();
-
       setIsRecording(true);
       setStatus("Listening...");
     } catch (error) {
       console.error("Microphone error:", error);
       setStatus("Microphone permission denied or unavailable");
+      setIsProcessingAudio(false);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      setStatus("Processing...");
+      setStatus("Processing your speech...");
     }
   };
 
+  const closeMobilePanels = () => {
+    setIsSidebarOpen(false);
+    setIsAnalysisOpen(false);
+  };
+
   return (
-    <div>
-      <header>
-        <h1>🗣️ AI English Coach</h1>
-        <span>● Online</span>
-      </header>
-
-      <main>
-        <h2>Daily Conversation</h2>
-
+    <div className="app-shell">
+      <header className="app-header">
         <button
-          onClick={startNewConversation}
-          disabled={isRecording || isSending}
+          className="mobile-menu-button"
+          onClick={() => {
+            setIsSidebarOpen((open) => !open);
+            setIsAnalysisOpen(false);
+          }}
+          aria-label="Toggle sidebar"
         >
-          + New Conversation
+          ☰
         </button>
 
         
-          {conversation.map((message, index) => (
-            <div key={index}>
-              <p>{message.role === "ai" ? "AI" : "You"}</p>
-              <div>{message.text}</div>
-              <br />
+        <div className="brand">
+          <span className="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              {[5, 11, 18, 12, 22, 14, 8].map((height, index) => (
+                <line
+                  key={index}
+                  x1={6 + index * 6}
+                  y1={24 - height / 2}
+                  x2={6 + index * 6}
+                  y2={24 + height / 2}
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+              ))}
+            </svg>
+          </span>
+
+          <div className="brand-text">
+            <h1>SpeakWise AI</h1>
+            <p>Speak confidently. Improve every day.</p>
+          </div>
+        </div>
+
+        <div className="header-actions">
+          <span className="online-status">
+            <span className="online-dot" />
+            Online
+          </span>
+
+          <button
+            className="mobile-analysis-button"
+            onClick={() => {
+              setIsAnalysisOpen((open) => !open);
+              setIsSidebarOpen(false);
+            }}
+          >
+            Analysis
+          </button>
+        </div>
+      </header>
+
+      <div className="workspace">
+        <aside className={`sidebar ${isSidebarOpen ? "sidebar-open" : ""}`}>
+          <button
+            className="new-conversation-button"
+            onClick={startNewConversation}
+            disabled={isRecording || isSending}
+          >
+            <span>＋</span> New Conversation
+          </button>
+
+          <div className="sidebar-section-label">WORKSPACE</div>
+
+          <button className="sidebar-item active" onClick={closeMobilePanels}>
+            <span>◉</span> Daily Conversation
+          </button>
+
+          <button
+            className="sidebar-item progress-disabled"
+            disabled
+            title="The progress dashboard will be added in a later step."
+          >
+            <span>▥</span> My Progress
+            <span className="coming-soon">Soon</span>
+          </button>
+
+          <div className="sidebar-bottom">
+            <div className="sidebar-avatar">AI</div>
+            <div>
+              <strong>English Coach</strong>
+              <p>Speaking practice</p>
             </div>
-          ))}
-        
+          </div>
+        </aside>
 
-        <div>
+        <main className="chat-panel">
+          <div className="chat-heading">
+            <div>
+              <h2>Daily Conversation</h2>
+              <p>Practise naturally, one conversation at a time.</p>
+            </div>
+            <span className="level-pill">Intermediate</span>
+          </div>
 
-          {communicationScore !== null && (
-            <div className="analysis-section">
-              <h2>Overall Communication Score</h2>
+          <div className="conversation-area">
+            {conversation.map((message, index) => (
+              <div
+                key={index}
+                className={`chat-message ${
+                  message.role === "ai" ? "ai" : "user"
+                }`}
+              >
+                <div className="message-avatar" aria-hidden="true">
+                  {message.role === "ai" ? "✦" : "●"}
+                </div>
 
+                <div className="message-content">
+                  <div className="message-label">
+                    {message.role === "ai" ? "AI Coach" : "You"}
+                  </div>
+                  <div className="message-bubble">{message.text}</div>
+                </div>
+              </div>
+            ))}
+
+            {isSending && (
+              <div className="thinking-indicator">AI Coach is thinking...</div>
+            )}
+          </div>
+
+          <div className="composer-area">
+            <p className="status-message">{status}</p>
+
+            <form className="message-form" onSubmit={sendTypedMessage}>
+              <input
+                type="text"
+                value={typedMessage}
+                onChange={(event) => setTypedMessage(event.target.value)}
+                placeholder="Type your answer here..."
+                disabled={isSending || isRecording || isProcessingAudio}
+                aria-label="Type your message"
+              />
+              <button
+                type="submit"
+                className="send-button"
+                disabled={!typedMessage.trim() || isSending || isRecording || isProcessingAudio }
+              >
+                {isSending ? "..." : "Send"}
+                
+                {/* {isProcessingAudio && !isRecording && (
+                  <div className="thinking-indicator">
+                    Processing your voice...
+                  </div>
+                )} */}
+
+              </button>
+            </form>
+
+            <div className="voice-row">
+              {!isRecording ? (
+                <button
+                  className="record-button"
+                  onClick={startRecording}
+                  disabled={isSending || isProcessingAudio}
+                >
+                  <span>🎤</span> Start Speaking
+                </button>
+              ) : (
+                <button className="record-button recording" onClick={stopRecording}>
+                  <span>⏹</span> Stop Recording
+                </button>
+              )}
+              <span className="voice-hint">
+                {isRecording
+                  ? "Listening to your answer"
+                  : "Prefer speaking? Use your microphone"}
+              </span>
+            </div>
+          </div>
+        </main>
+
+        <aside
+          className={`analysis-panel ${
+            isAnalysisOpen ? "analysis-open" : ""
+          }`}
+        >
+          <div className="analysis-heading">
+            <div>
+              <h2>Your Practice</h2>
+              <p>Your latest learning insights</p>
+            </div>
+            <button
+              className="close-analysis-button"
+              onClick={() => setIsAnalysisOpen(false)}
+              aria-label="Close analysis"
+            >
+              ✕
+            </button>
+          </div>
+
+          <section className="insight-card goal-card">
+            <div className="card-eyebrow">TODAY'S GOAL</div>
+            <h3>Speak with confidence</h3>
+            <p>Try to express your ideas clearly in complete sentences.</p>
+            <div className="goal-progress-track">
+              <div
+                className={`goal-progress-fill ${
+                  speechAnalysis ? "goal-progress-started" : ""
+                }`}
+              />
+            </div>
+            <span className="goal-caption">
+              {speechAnalysis ? "First practice completed" : "Start a conversation to begin"}
+            </span>
+          </section>
+
+          <section className="insight-card">
+            <div className="section-title-row">
+              <h3>Latest Scores</h3>
+              <span className="live-label">LIVE</span>
+            </div>
+
+            <div className="score-row">
+              <span>Communication</span>
+              <strong>
+                {communicationScore !== null
+                  ? `${communicationScore}/100`
+                  : "--/100"}
+              </strong>
+            </div>
+            <div className="score-track">
+              <div
+                className="score-fill communication-fill"
+                style={{
+                  width: `${Math.max(
+                    0,
+                    Math.min(100, communicationScore ?? 0)
+                  )}%`,
+                }}
+              />
+            </div>
+
+            <div className="score-row">
+              <span>Grammar</span>
+              <strong>
+                {grammarAnalysis?.grammar_score != null
+                  ? `${grammarAnalysis.grammar_score}/100`
+                  : "--/100"}
+              </strong>
+            </div>
+            <div className="score-track">
+              <div
+                className="score-fill grammar-fill"
+                style={{
+                  width: `${Math.max(
+                    0,
+                    Math.min(100, grammarAnalysis?.grammar_score ?? 0)
+                  )}%`,
+                }}
+              />
+            </div>
+
+            <div className="score-row">
+              <span>Fluency</span>
+              <strong>
+                {fluencyScore !== null ? `${fluencyScore}/100` : "--/100"}
+              </strong>
+            </div>
+            <div className="score-track">
+              <div
+                className="score-fill fluency-fill"
+                style={{
+                  width: `${Math.max(0, Math.min(100, fluencyScore ?? 0))}%`,
+                }}
+              />
+            </div>
+
+            <p className="score-note">
+              {communicationScore !== null
+                ? "Scores from your latest voice practice."
+                : "Your scores will appear after your first voice practice."}
+            </p>
+          </section>
+
+          <section className="insight-card tip-card">
+            <div className="tip-icon">💡</div>
+            <div>
+              <h3>Quick English Tip</h3>
               <p>
-                <strong>{communicationScore}/100</strong>
+                Instead of saying only “It was good,” add a reason:
+                “It was good because I learned something new.”
               </p>
             </div>
+          </section>
+
+          <div className="detailed-analysis-heading">
+            <h3>Detailed Analysis</h3>
+          </div>
+
+          {!grammarAnalysis && !speechAnalysis && (
+            <div className="empty-analysis">
+              <span>◷</span>
+              <p>Your grammar corrections and speech insights will appear here after you speak.</p>
+            </div>
+          )}
+
+          {communicationScore !== null && (
+            <section className="insight-card detail-card">
+              <h3>Communication Score</h3>
+              <div className="large-score">
+                {communicationScore}<span>/100</span>
+              </div>
+            </section>
           )}
 
           {grammarAnalysis && (
-            <div className="analysis-section">
-              <h2>Grammar Analysis</h2>
+            <section className="insight-card detail-card">
+              <h3>Grammar Analysis</h3>
 
               <p>
-                <strong>Grammar Score:</strong>{" "}
+                <strong>Grammar score:</strong>{" "}
                 {grammarAnalysis.grammar_score}/100
               </p>
 
-              <p>
-              <strong>Original:</strong>{" "}
-              {grammarAnalysis.original}
-              </p>
+              <p className="detail-label">Original</p>
+              <p className="detail-text">{grammarAnalysis.original}</p>
+
+              <p className="detail-label">Corrected</p>
+              <p className="corrected-text">{grammarAnalysis.corrected}</p>
 
               <p>
-              <strong>Corrected:</strong>{" "}
-              {grammarAnalysis.corrected}
-              </p>
-
-              <p>
-                <strong>Grammar Issues:</strong>{" "}
+                <strong>Grammar issues:</strong>{" "}
                 {grammarAnalysis.has_errors ? "Found" : "None"}
               </p>
 
-              {grammarAnalysis.changes.length > 0 && (
-                <div>
-                  <strong>Detected Changes:</strong>
-
+              {grammarAnalysis.changes?.length > 0 && (
+                <>
+                  <p className="detail-label">Detected changes</p>
                   <ul>
                     {grammarAnalysis.changes.map((change, index) => (
                       <li key={index}>
-                        "{change.original}" → "{change.corrected}"
+                        “{change.original}” → “{change.corrected}”
                       </li>
                     ))}
                   </ul>
-                </div>
+                </>
               )}
-
-            </div>
+            </section>
           )}
-
-          
 
           {speechAnalysis && (
-            <div>
-              <h3>Speech Analysis</h3><br/>
+            <section className="insight-card detail-card">
+              <h3>Speech Analysis</h3>
 
-              <h4>Fluency Score</h4>
-              <p>
-                {fluencyScore !== null ? `${fluencyScore}/100` : "--"}
-              </p><br/>
+              <div className="metric-row">
+                <span>Words spoken</span>
+                <strong>{speechAnalysis.word_count}</strong>
+              </div>
+              <div className="metric-row">
+                <span>Duration</span>
+                <strong>{speechAnalysis.duration_seconds}s</strong>
+              </div>
+              <div className="metric-row">
+                <span>Speaking rate</span>
+                <strong>{speechAnalysis.speaking_rate_wpm} WPM</strong>
+              </div>
+              <div className="metric-row">
+                <span>Filler words</span>
+                <strong>{speechAnalysis.filler_word_count}</strong>
+              </div>
+              <div className="metric-row">
+                <span>Pauses</span>
+                <strong>{speechAnalysis.pause_count}</strong>
+              </div>
+              <div className="metric-row">
+                <span>Total pause time</span>
+                <strong>{speechAnalysis.total_pause_seconds}s</strong>
+              </div>
+              <div className="metric-row">
+                <span>Longest pause</span>
+                <strong>{speechAnalysis.longest_pause_seconds}s</strong>
+              </div>
 
-              <p>
-                Words: {speechAnalysis.word_count}
+              <p className="detail-label">Filler word details</p>
+              <p className="detail-text">
+                {speechAnalysis.filler_words?.length > 0
+                  ? speechAnalysis.filler_words.join(", ")
+                  : "No filler words detected"}
               </p>
-
-              <p>
-                Duration: {speechAnalysis.duration_seconds}s
-              </p>
-
-              <p>
-                Speaking Rate: {speechAnalysis.speaking_rate_wpm} WPM
-              </p>
-
-              <p>
-                Filler Words: {speechAnalysis.filler_word_count}
-              </p>
-
-              <p>
-                {speechAnalysis.filler_words.length > 0
-                ? `Detected: ${speechAnalysis.filler_words.join(", ")}`
-                : "No filler words detected"}
-              </p>
-
-              <p>
-                Pauses: {speechAnalysis.pause_count}
-              </p>
-
-              <p>
-                Total Pause Time: {speechAnalysis.total_pause_seconds}s
-              </p>
-
-              <p>
-                Longest Pause: {speechAnalysis.longest_pause_seconds}s
-              </p>
-
-            </div>
+            </section>
           )}
 
-        </div>
+          {transcription && (
+            <section className="insight-card detail-card">
+              <h3>Latest Transcription</h3>
+              <p className="detail-text">{transcription}</p>
+            </section>
+          )}
+        </aside>
+      </div>
 
-        <p style={{ textAlign: "center" }}>{status}</p>
-
-        <form onSubmit={sendTypedMessage}> 
-          <input 
-            type="text"  
-            value={typedMessage} 
-            onChange={(event) => setTypedMessage(event.target.value)} 
-            placeholder="Type your message here..." 
-            disabled={isSending || isRecording} 
-            style={{ 
-              padding: "10px", 
-              width: "70%", 
-              marginRight: "8px", 
-              }} 
-          /> 
-          
-          <button 
-            type="submit" 
-            disabled={!typedMessage.trim() || isSending || isRecording} 
-          > 
-            {isSending ? "Thinking..." : "Send"} 
-          </button>   
-        </form> 
-        <br />
-
-        {!isRecording ? (
-          <button onClick={startRecording}>
-            🎤 Start Speaking
-          </button>
-        ) : (
-          <button onClick={stopRecording}>
-            ⏹️ Stop Recording
-          </button>
-        )}
-      </main>
-
-      <footer>
-        <span>Mode: Daily Conversation</span>
-        <span>Level: Intermediate</span>
-      </footer>
+      <button
+        className={`mobile-backdrop ${
+          isSidebarOpen || isAnalysisOpen ? "visible" : ""
+        }`}
+        onClick={closeMobilePanels}
+        aria-label="Close open panel"
+        tabIndex={isSidebarOpen || isAnalysisOpen ? 0 : -1}
+      />
     </div>
   );
 }
