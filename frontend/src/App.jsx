@@ -190,6 +190,7 @@ function App() {
     }
   };
 
+
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
@@ -197,6 +198,32 @@ function App() {
       setStatus("Processing your speech...");
     }
   };
+
+  
+  const speakMessage = (text) => {
+    if (!("speechSynthesis" in window)) {
+      setStatus("Text-to-speech is not supported in this browser.");
+      return;
+    }
+
+    // Stop any previous speech before starting another
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+
+  
+  const stopSpeaking = () => {
+    window.speechSynthesis.cancel();
+  };
+
+
 
   const closeMobilePanels = () => {
     setIsSidebarOpen(false);
@@ -320,6 +347,27 @@ function App() {
                     {message.role === "ai" ? "AI Coach" : "You"}
                   </div>
                   <div className="message-bubble">{message.text}</div>
+
+                  {message.role === "ai" && (
+                    <div className="speech-controls">
+                      <button
+                        className="speak-button"
+                        onClick={() => speakMessage(message.text)}
+                        title="Listen to this response"
+                      >
+                        🔊 Listen
+                      </button>
+
+                      <button
+                        className="speak-button"
+                        onClick={stopSpeaking}
+                        title="Stop speaking"
+                      >
+                      ⏹ Stop
+                      </button>
+                    </div>
+                  )}
+
                 </div>
               </div>
             ))}

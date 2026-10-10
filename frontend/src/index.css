@@ -825,6 +825,38 @@ input:focus-visible {
   text-align: right;
 }
 
+
+/* ---------- listen button ---------- */
+
+
+.speak-button {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: transparent;
+  color: #2563eb;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.speak-button:hover {
+  background: #eff6ff;
+}
+
+.speak-button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.speech-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+
 /* ---------- Mobile backdrop ---------- */
 
 .mobile-backdrop {
