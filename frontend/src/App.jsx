@@ -20,6 +20,8 @@ function App() {
   // UI controls
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+  
+  const [practiceMode, setPracticeMode] = useState("voice");
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -378,53 +380,77 @@ function App() {
           </div>
 
           <div className="composer-area">
+            <div className="practice-mode-selector">
+              <button
+                type="button"
+                className={practiceMode === "voice" ? "mode-button active" : "mode-button"}
+                onClick={() => setPracticeMode("voice")}
+                disabled={isSending || isRecording || isProcessingAudio}
+              >
+                🎤 Voice Mode
+              </button>
+
+              <button
+                type="button"
+                className={practiceMode === "typing" ? "mode-button active" : "mode-button"}
+                onClick={() => setPracticeMode("typing")}
+                disabled={isSending || isRecording || isProcessingAudio}
+              >
+                ⌨️ Typing Mode
+              </button>
+            </div>
             <p className="status-message">{status}</p>
 
-            <form className="message-form" onSubmit={sendTypedMessage}>
-              <input
-                type="text"
-                value={typedMessage}
-                onChange={(event) => setTypedMessage(event.target.value)}
-                placeholder="Type your answer here..."
-                disabled={isSending || isRecording || isProcessingAudio}
-                aria-label="Type your message"
-              />
-              <button
-                type="submit"
-                className="send-button"
-                disabled={!typedMessage.trim() || isSending || isRecording || isProcessingAudio }
-              >
-                {isSending ? "..." : "Send"}
-                
-                {/* {isProcessingAudio && !isRecording && (
-                  <div className="thinking-indicator">
-                    Processing your voice...
-                  </div>
-                )} */}
-
-              </button>
-            </form>
-
-            <div className="voice-row">
-              {!isRecording ? (
+            {practiceMode === "typing" && (
+              <form className="message-form" onSubmit={sendTypedMessage}>
+                <input
+                  type="text"
+                  value={typedMessage}
+                  onChange={(event) => setTypedMessage(event.target.value)}
+                  placeholder="Type your answer here..."
+                  disabled={isSending || isRecording || isProcessingAudio}
+                  aria-label="Type your message"
+                />
                 <button
-                  className="record-button"
-                  onClick={startRecording}
-                  disabled={isSending || isProcessingAudio}
+                  type="submit"
+                  className="send-button"
+                  disabled={!typedMessage.trim() || isSending || isRecording || isProcessingAudio }
                 >
-                  <span>🎤</span> Start Speaking
+                  {isSending ? "..." : "Send"}
+                
+                  {/* {isProcessingAudio && !isRecording && (
+                    <div className="thinking-indicator">
+                      Processing your voice...
+                    </div>
+                  )} */}
+
                 </button>
-              ) : (
-                <button className="record-button recording" onClick={stopRecording}>
-                  <span>⏹</span> Stop Recording
-                </button>
-              )}
-              <span className="voice-hint">
-                {isRecording
-                  ? "Listening to your answer"
-                  : "Prefer speaking? Use your microphone"}
-              </span>
-            </div>
+              </form>
+            )}  
+
+            {practiceMode === "voice" && (
+              <div className="voice-row">
+                {!isRecording ? (
+                  <button
+                    className="record-button"
+                    onClick={startRecording}
+                    disabled={isSending || isProcessingAudio}
+                  >
+                    <span>🎤</span> Start Speaking
+                  </button>
+                ) : (
+                  <button className="record-button recording" onClick={stopRecording}>
+                    <span>⏹</span> Stop Recording
+                  </button>
+                )}
+                <span className="voice-hint">
+                  {isRecording
+                    ? "Listening to your answer"
+                    : "Prefer speaking? Use your microphone"}
+                </span>
+              </div>
+            )}
+
           </div>
         </main>
 

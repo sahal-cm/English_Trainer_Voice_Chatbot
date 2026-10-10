@@ -828,7 +828,6 @@ input:focus-visible {
 
 /* ---------- listen button ---------- */
 
-
 .speak-button {
   margin-top: 8px;
   padding: 6px 10px;
@@ -854,6 +853,42 @@ input:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+
+/* ---------- Mode Selector:Voice Mode and Typing Mode ---------- */
+
+.practice-mode-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.mode-button {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mode-button.active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.mode-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 
