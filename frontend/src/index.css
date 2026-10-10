@@ -894,6 +894,33 @@ input:focus-visible {
 
 /* ---------- Mobile backdrop ---------- */
 
+.conversation-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.history-item {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.history-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ---------- Mobile backdrop ---------- */
+
 .mobile-backdrop {
   display: none;
 }

@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
@@ -23,13 +23,69 @@ function App() {
   
   const [practiceMode, setPracticeMode] = useState("voice");
 
+  const [savedConversations, setSavedConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState(null);
+
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("speakwise_conversations");
+
+      if (saved) {
+        setSavedConversations(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error("Failed to load saved conversations:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeConversationId || conversation.length === 0) return;
+
+    setSavedConversations((previous) => {
+      const existing = previous.find(
+        (item) => item.id === activeConversationId
+      );
+
+      const updatedConversation = {
+        id: activeConversationId,
+        title:
+          conversation.find((message) => message.role === "user")?.text
+            ?.slice(0, 35) || "New Conversation",
+        messages: conversation,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updated = existing
+        ? previous.map((item) =>
+            item.id === activeConversationId
+              ? updatedConversation
+              : item
+          )
+        : [updatedConversation, ...previous];
+
+      localStorage.setItem(
+        "speakwise_conversations",
+        JSON.stringify(updated)
+      );
+
+      return updated;
+    });
+  }, [conversation, activeConversationId]);
+
+
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+
 
   const startNewConversation = () => {
     if (isRecording || isSending || isProcessingAudio) return;
 
+    const newId = crypto.randomUUID();
+
+    setActiveConversationId(newId);
     setConversation([{ role: "ai", text: "Hi! How was your day?" }]);
+
     setTranscription("");
     setSpeechAnalysis(null);
     setFluencyScore(null);
@@ -38,6 +94,32 @@ function App() {
     setAiMessage("Hi! How was your day?");
     setTypedMessage("");
     setStatus("Ready to speak or type");
+    setIsSidebarOpen(false);
+    setIsAnalysisOpen(false);
+  };
+
+  const openConversation = (item) => {
+    if (isRecording || isSending || isProcessingAudio) return;
+
+    setActiveConversationId(item.id);
+    setConversation(item.messages);
+
+    const lastAIMessage = [...item.messages]
+      .reverse()
+      .find((message) => message.role === "ai");
+
+    setAiMessage(
+      lastAIMessage?.text || "Hi! How was your day?"
+    );
+
+    setTypedMessage("");
+    setTranscription("");
+    setSpeechAnalysis(null);
+    setFluencyScore(null);
+    setGrammarAnalysis(null);
+    setCommunicationScore(null);
+
+    setStatus("Conversation loaded");
     setIsSidebarOpen(false);
     setIsAnalysisOpen(false);
   };
@@ -314,6 +396,31 @@ function App() {
             <span className="coming-soon">Soon</span>
           </button>
 
+          {savedConversations.length > 0 && (
+            <>
+              <div className="sidebar-section-label">RECENT CHATS</div>
+
+              <div className="conversation-history-list">
+                {savedConversations.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`sidebar-item history-item ${
+                      activeConversationId === item.id ? "active" : ""
+                    }`}
+                    onClick={() => openConversation(item)}
+                    disabled={
+                      isRecording || isSending || isProcessingAudio
+                    }
+                    title={item.title}
+                  >
+                    <span>◷</span>
+                    <span className="history-title">{item.title}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          
           <div className="sidebar-bottom">
             <div className="sidebar-avatar">AI</div>
             <div>
