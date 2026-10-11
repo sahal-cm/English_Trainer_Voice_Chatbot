@@ -24,7 +24,12 @@ function App() {
   const [practiceMode, setPracticeMode] = useState("voice");
 
   const [savedConversations, setSavedConversations] = useState([]);
-  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [activeConversationId, setActiveConversationId] = useState(
+    () => crypto.randomUUID()
+  );
+
+  const [renamingConversationId, setRenamingConversationId] = useState(null);
+  const [renameTitle, setRenameTitle] = useState("");
 
 
   useEffect(() => {
@@ -40,7 +45,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeConversationId || conversation.length === 0) return;
+    if (
+      !activeConversationId ||
+      !conversation.some((message) => message.role === "user")
+    ) {
+      return;
+    }
 
     setSavedConversations((previous) => {
       const existing = previous.find(
@@ -50,6 +60,7 @@ function App() {
       const updatedConversation = {
         id: activeConversationId,
         title:
+          existing?.title ||
           conversation.find((message) => message.role === "user")?.text
             ?.slice(0, 35) || "New Conversation",
         messages: conversation,
@@ -123,6 +134,76 @@ function App() {
     setIsSidebarOpen(false);
     setIsAnalysisOpen(false);
   };
+
+  const startRenamingConversation = (item) => {
+    setRenamingConversationId(item.id);
+    setRenameTitle(item.title);
+  };
+
+  const saveConversationTitle = (id) => {
+    const trimmedTitle = renameTitle.trim();
+
+    if (!trimmedTitle) return;
+
+    setSavedConversations((previous) => {
+      const updated = previous.map((item) =>
+        item.id === id
+          ? { ...item, title: trimmedTitle }
+          : item
+      );
+
+      localStorage.setItem(
+        "speakwise_conversations",
+        JSON.stringify(updated)
+      );
+
+      return updated;
+    });
+
+    setRenamingConversationId(null);
+    setRenameTitle("");
+  };
+
+  const deleteConversation = (id) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this conversation?"
+    );
+
+    if (!confirmed) return;
+
+    setSavedConversations((previous) => {
+      const updated = previous.filter((item) => item.id !== id);
+
+      localStorage.setItem(
+        "speakwise_conversations",
+        JSON.stringify(updated)
+      );
+
+      return updated;
+    });
+
+    if (activeConversationId === id) {
+      setActiveConversationId(crypto.randomUUID());
+      setConversation([
+        { role: "ai", text: "Hi! How was your day?" },
+      ]);
+      setAiMessage("Hi! How was your day?");
+      setTypedMessage("");
+      setTranscription("");
+      setSpeechAnalysis(null);
+      setFluencyScore(null);
+      setGrammarAnalysis(null);
+      setCommunicationScore(null);
+      setStatus("Ready to speak or type");
+    }
+
+    if (renamingConversationId === id) {
+      setRenamingConversationId(null);
+      setRenameTitle("");
+    }
+  };
+
+
 
   const sendTypedMessage = async (event) => {
     event.preventDefault();
@@ -400,23 +481,86 @@ function App() {
             <>
               <div className="sidebar-section-label">RECENT CHATS</div>
 
-              <div className="conversation-history-list">
+              <div className="conversation-history-list">  
                 {savedConversations.map((item) => (
-                  <button
-                    key={item.id}
-                    className={`sidebar-item history-item ${
-                      activeConversationId === item.id ? "active" : ""
-                    }`}
-                    onClick={() => openConversation(item)}
-                    disabled={
-                      isRecording || isSending || isProcessingAudio
-                    }
-                    title={item.title}
-                  >
-                    <span>◷</span>
-                    <span className="history-title">{item.title}</span>
-                  </button>
+                  <div key={item.id} className="history-row">
+                    {renamingConversationId === item.id ? (
+                      <form
+                        className="history-rename-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          saveConversationTitle(item.id);
+                        }}
+                      >
+                        <input
+                          value={renameTitle}
+                          onChange={(event) => setRenameTitle(event.target.value)}
+                          autoFocus
+                          aria-label="New conversation title"
+                          maxLength={60}
+                          placeholder="Conversation title"
+                        />
+
+                        <button type="submit" title="Save title">
+                          ✓
+                        </button>
+
+                        <button
+                          type="button"
+                          title="Cancel rename"
+                          onClick={() => {
+                            setRenamingConversationId(null);
+                            setRenameTitle("");
+                          }}
+                        >
+                          ×
+                        </button>
+                      </form>
+                    ) : (
+                      <>
+                        <button
+                          className={`sidebar-item history-item ${
+                            activeConversationId === item.id ? "active" : ""
+                          }`}
+                          onClick={() => openConversation(item)}
+                          disabled={
+                            isRecording || isSending || isProcessingAudio
+                          }
+                          title={item.title}
+                        >
+                          <span>◷</span>
+                          <span className="history-title">{item.title}</span>
+                        </button>
+
+                        <button
+                          className="history-action-button"
+                          title="Rename conversation"
+                          aria-label={`Rename ${item.title}`}
+                          onClick={() => startRenamingConversation(item)}
+                          disabled={
+                            isRecording || isSending || isProcessingAudio
+                          }
+                        >
+                          ✎
+                        </button>
+                       
+                        <button
+                          className="history-action-button history-delete-button"
+                          title="Delete conversation"
+                          aria-label={`Delete ${item.title}`}
+                          onClick={() => deleteConversation(item.id)}
+                          disabled={
+                            isRecording || isSending || isProcessingAudio
+                          }
+                        >
+                          🗑
+                        </button>
+
+                      </>
+                    )}
+                  </div>
                 ))}
+
               </div>
             </>
           )}

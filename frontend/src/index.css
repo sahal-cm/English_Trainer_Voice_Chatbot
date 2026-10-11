@@ -892,7 +892,7 @@ input:focus-visible {
 }
 
 
-/* ---------- Mobile backdrop ---------- */
+/* ---------- conversation history (recent chat) ---------- */
 
 .conversation-history-list {
   display: flex;
@@ -916,6 +916,86 @@ input:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+/* ---------- History Rename control ---------- */
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.history-row .history-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-action-button {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.history-action-button:hover {
+  background: rgba(128, 128, 128, 0.15);
+  opacity: 1;
+}
+
+.history-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.history-rename-form input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  padding: 7px;
+  border: 1px solid #888;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+
+.history-rename-form button {
+  flex-shrink: 0;
+  min-width: 28px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.history-rename-form button:hover {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+
+/* ---------- History delete control ---------- */
+
+.history-delete-button:hover {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
+.history-action-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 
