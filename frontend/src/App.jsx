@@ -17,6 +17,8 @@ function App() {
   const [isSending, setIsSending] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
 
+  const [copyNotification, setCopyNotification] = useState(null);
+
   // UI controls
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
@@ -31,6 +33,8 @@ function App() {
   const [renamingConversationId, setRenamingConversationId] = useState(null);
   const [renameTitle, setRenameTitle] = useState("");
 
+  const [conversationToDelete, setConversationToDelete] = useState(null);
+
 
   useEffect(() => {
     try {
@@ -43,6 +47,7 @@ function App() {
       console.error("Failed to load saved conversations:", error);
     }
   }, []);
+
 
   useEffect(() => {
     if (
@@ -84,6 +89,18 @@ function App() {
     });
   }, [conversation, activeConversationId]);
 
+  
+  useEffect(() => {
+    if (!copyNotification) return;
+
+    const timer = setTimeout(() => {
+      setCopyNotification(null);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [copyNotification]);
+
+
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -108,6 +125,7 @@ function App() {
     setIsSidebarOpen(false);
     setIsAnalysisOpen(false);
   };
+
 
   const openConversation = (item) => {
     if (isRecording || isSending || isProcessingAudio) return;
@@ -135,10 +153,12 @@ function App() {
     setIsAnalysisOpen(false);
   };
 
+
   const startRenamingConversation = (item) => {
     setRenamingConversationId(item.id);
     setRenameTitle(item.title);
   };
+
 
   const saveConversationTitle = (id) => {
     const trimmedTitle = renameTitle.trim();
@@ -164,12 +184,24 @@ function App() {
     setRenameTitle("");
   };
 
+  
   const deleteConversation = (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this conversation?"
+    if (isRecording || isSending || isProcessingAudio) return;
+
+    const item = savedConversations.find(
+      (conversation) => conversation.id === id
     );
 
-    if (!confirmed) return;
+    if (item) {
+      setConversationToDelete(item);
+    }
+  };
+
+
+  const confirmDeleteConversation = () => {
+    if (!conversationToDelete) return;
+
+    const id = conversationToDelete.id;
 
     setSavedConversations((previous) => {
       const updated = previous.filter((item) => item.id !== id);
@@ -201,8 +233,9 @@ function App() {
       setRenamingConversationId(null);
       setRenameTitle("");
     }
-  };
 
+    setConversationToDelete(null);
+  };
 
 
   const sendTypedMessage = async (event) => {
@@ -383,9 +416,37 @@ function App() {
   };
 
 
-  
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
+  };
+
+
+  
+  const copyConversation = async () => {
+    const conversationText = conversation
+      .map((message) => {
+        const speaker = message.role === "ai" ? "AI Coach" : "You";
+        return `${speaker}:\n${message.text}`;
+      })
+      .join("\n\n");
+
+    try {
+      await navigator.clipboard.writeText(conversationText);
+
+      setCopyNotification({
+        type: "success",
+        title: "Conversation copied",
+        message: "Your conversation is ready to paste.",
+      });
+    } catch (error) {
+      console.error("Failed to copy conversation:", error);
+
+      setCopyNotification({
+        type: "error",
+        title: "Couldn't copy conversation",
+        message: "Please try again.",
+      });
+    }
   };
 
 
@@ -580,7 +641,19 @@ function App() {
               <h2>Daily Conversation</h2>
               <p>Practise naturally, one conversation at a time.</p>
             </div>
-            <span className="level-pill">Intermediate</span>
+            <div className="chat-heading-actions">
+              <span className="level-pill">Intermediate</span>
+
+              <button
+                type="button"
+                className="copy-conversation-button"
+                onClick={copyConversation}
+                disabled={!conversation.some((message) => message.role === "user")}
+                title="Copy conversation"
+              >
+                📋 Copy
+              </button>
+            </div>
           </div>
 
           <div className="conversation-area">
@@ -933,6 +1006,88 @@ function App() {
         aria-label="Close open panel"
         tabIndex={isSidebarOpen || isAnalysisOpen ? 0 : -1}
       />
+
+      
+      {copyNotification && (
+        <div
+          className={`copy-toast ${copyNotification.type}`}
+          role={copyNotification.type === "error" ? "alert" : "status"}
+          aria-live={copyNotification.type === "error" ? "assertive" : "polite"}
+        >
+          <span className="copy-toast-icon" aria-hidden="true">
+            {copyNotification.type === "success" ? "✓" : "!"}
+          </span>
+
+          <div className="copy-toast-content">
+            <strong>{copyNotification.title}</strong>
+            <p>{copyNotification.message}</p>
+          </div>
+
+          <button
+            type="button"
+            className="copy-toast-close"
+            aria-label="Dismiss notification"
+            onClick={() => setCopyNotification(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      
+      {conversationToDelete && (
+        <div
+          className="delete-modal-overlay"
+          onClick={() => setConversationToDelete(null)}
+        >
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="delete-modal-heading">
+              <div className="delete-modal-icon">🗑</div>
+                <div>
+                  <h2 id="delete-modal-title">Delete conversation?</h2>
+                  <p className="delete-modal-warning">
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+            
+
+            <p className="delete-modal-description">
+              Are you sure you want to delete this conversation?
+              Your saved messages will be permanently removed from this device.
+            </p>
+
+            <div className="delete-modal-chat-title">
+              <span>◷ </span>
+              <span>{conversationToDelete.title}</span>
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                className="delete-modal-cancel"
+                onClick={() => setConversationToDelete(null)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="delete-modal-confirm"
+                onClick={confirmDeleteConversation}
+              >
+                Delete conversation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
