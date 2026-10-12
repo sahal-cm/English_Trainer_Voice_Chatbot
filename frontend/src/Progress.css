@@ -1,0 +1,172 @@
+
+.progress-page {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 28px;
+  overflow-y: auto;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.progress-header h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.progress-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.progress-welcome {
+  padding: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.progress-welcome h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.progress-welcome p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+@media (max-width: 768px) {
+  .progress-page {
+    padding: 20px;
+  }
+
+  .progress-welcome {
+    padding: 20px;
+  }
+}
+
+/* -------------score-card styling------------ */
+
+.progress-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.progress-card {
+  padding: 22px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.progress-card p {
+  margin: 0 0 14px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.progress-card h2 {
+  margin: 0;
+  font-size: 28px;
+  color: #2563eb;
+}
+
+.progress-welcome pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .progress-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ------------- Practice History Table ------------ */
+
+.practice-history-table {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.practice-history-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.practice-history-table th,
+.practice-history-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.practice-history-table th {
+  font-weight: 600;
+}
+
+
+/* ------------- Progress Chart ------------ */
+
+.score-chart {
+  width: 100%;
+  margin-top: 20px;
+}
+
+.score-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.score-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.score-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.score-chart-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-fluency {
+  background: #3b82f6;
+}
+
+.legend-grammar {
+  background: #10b981;
+}
+
+.legend-communication {
+  background: #f59e0b;
+}
