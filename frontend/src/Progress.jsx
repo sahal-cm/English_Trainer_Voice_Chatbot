@@ -1,4 +1,5 @@
 
+import { useState } from "react";
 import "./Progress.css";
 
 function Progress({
@@ -8,6 +9,18 @@ function Progress({
   communicationScore,
   practiceHistory = [],
 }) {
+
+  
+  const [dailyGoal, setDailyGoal] = useState(() => {
+    const saved = localStorage.getItem("speakwise_daily_goal");
+    const parsed = Number(saved);
+
+    return Number.isFinite(parsed) && parsed >= 1 && parsed <= 20
+      ? parsed
+      : 5;
+  });
+
+
   const getScore = (value) => {
     if (value === null || value === undefined) {
       return "—";
@@ -21,6 +34,16 @@ function Progress({
   };
 
   const grammarScore = grammarAnalysis?.grammar_score;
+
+
+  const today = new Date().toDateString();
+
+  const todaySessions = practiceHistory.filter(
+    (session) => new Date(session.date).toDateString() === today
+  ).length;
+
+  const goalProgress = Math.min((todaySessions / dailyGoal) * 100, 100);
+
 
   
   const getAverage = (key) => {
@@ -74,6 +97,59 @@ function Progress({
           </p>
         </div>
       </div>
+
+
+      
+      <div className="progress-welcome daily-goal-card">
+        <h2>Daily Practice Goal</h2>
+
+        <p>
+          Today's voice sessions:{" "}
+          <strong>{todaySessions} / {dailyGoal}</strong>
+        </p>
+
+        <div
+          className="goal-progress-track"
+          role="progressbar"
+          aria-label="Daily practice goal"
+          aria-valuenow={Math.min(todaySessions, dailyGoal)}
+          aria-valuemin={0}
+          aria-valuemax={dailyGoal}
+        >
+          <div
+            className="goal-progress-fill"
+            style={{ width: `${goalProgress}%` }}
+          />
+        </div>
+
+        <label htmlFor="daily-goal">Daily session target</label>
+
+        <select
+          id="daily-goal"
+          value={dailyGoal}
+          onChange={(event) => {
+            const value = Number(event.target.value);
+            setDailyGoal(value);
+            localStorage.setItem(
+              "speakwise_daily_goal",
+              String(value)
+            );
+          }}
+        >
+          <option value={3}>3 sessions</option>
+          <option value={5}>5 sessions</option>
+          <option value={10}>10 sessions</option>
+          <option value={15}>15 sessions</option>
+          <option value={20}>20 sessions</option>
+        </select>
+
+        <p>
+          {todaySessions >= dailyGoal
+            ? "Great work! You've reached today's goal."
+            : `${dailyGoal - todaySessions} more session(s) to reach today's goal.`}
+        </p>
+      </div>
+
       
 
       <div className="progress-welcome">
