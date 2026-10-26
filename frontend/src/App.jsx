@@ -551,19 +551,25 @@ function App() {
             Online
           </span>
 
-          <button
-            className="mobile-analysis-button"
-            onClick={() => {
-              setIsAnalysisOpen((open) => !open);
-              setIsSidebarOpen(false);
-            }}
-          >
-            Analysis
-          </button>
+          {currentPage === "conversation" && (
+            <button
+              className="mobile-analysis-button"
+              onClick={() => {
+                setIsAnalysisOpen((open) => !open);
+                setIsSidebarOpen(false);
+              }}
+            >
+              Analysis
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="workspace">
+      <div
+        className={`workspace ${
+        currentPage === "progress" ? "progress-workspace" : ""
+        }`}
+      >
         <aside className={`sidebar ${isSidebarOpen ? "sidebar-open" : ""}`}>
           <button
             className="new-conversation-button"
@@ -599,7 +605,7 @@ function App() {
             <span>▥</span> My Progress
           </button>
 
-          {savedConversations.length > 0 && (
+          {currentPage === "conversation" && savedConversations.length > 0 && (
             <>
               <div className="sidebar-section-label">RECENT CHATS</div>
 

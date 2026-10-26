@@ -158,6 +158,10 @@ input:focus-visible {
   overflow: hidden;
 }
 
+.workspace.progress-workspace {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
 /* ---------- Left sidebar ---------- */
 
 .sidebar {
@@ -1413,7 +1417,10 @@ input:focus-visible {
   .workspace {
     position: relative;
     display: block;
+    flex: 1 1 0;
+    height: 0;
     min-height: 0;
+    overflow: hidden;
   }
 
   .chat-panel {
@@ -1585,6 +1592,8 @@ input:focus-visible {
     font-size: 16px;
   }
 
+
+
   .conversation-area {
     padding-right: 11px;
     padding-left: 11px;
@@ -1608,6 +1617,7 @@ input:focus-visible {
     width: 100%;
     text-align: center;
   }
+
 }
 
 /* Respect reduced-motion preferences */
