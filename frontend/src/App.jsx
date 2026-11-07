@@ -12,10 +12,8 @@ function App() {
   const [communicationScore, setCommunicationScore] = useState(null);
 
   const [practiceHistory, setPracticeHistory] = useState([]);
-
   const [practiceTurnCount, setPracticeTurnCount] = useState(0);
   const [sessionSummary, setSessionSummary] = useState(null);
-
 
   const [aiMessage, setAiMessage] = useState("Hi! How was your day?");
   const [conversation, setConversation] = useState([
@@ -31,35 +29,76 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
 
-  const [currentPage, setCurrentPage] = useState("conversation");
-  
+  const [currentPage, setCurrentPage] = useState(() => {
+    try {
+      const savedPage = localStorage.getItem("speakwise_current_page");
+      return savedPage === "progress" ? "progress" : "conversation";
+    } catch (error) {
+      console.error("Failed to load current page:", error);
+      return "conversation";
+    }
+  });
+
   const [practiceMode, setPracticeMode] = useState("voice");
 
   const [savedConversations, setSavedConversations] = useState([]);
-  const [activeConversationId, setActiveConversationId] = useState(
-    () => crypto.randomUUID()
-  );
+
+  const [activeConversationId, setActiveConversationId] = useState(() => {
+    try {
+      return localStorage.getItem("speakwise_active_conversation") || null;
+    } catch (error) {
+      return null;
+    }
+  });
+
+  const [isConversationLoaded, setIsConversationLoaded] = useState(false);
 
   const [renamingConversationId, setRenamingConversationId] = useState(null);
   const [renameTitle, setRenameTitle] = useState("");
-
   const [conversationToDelete, setConversationToDelete] = useState(null);
 
+  // Refs
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const activePracticeSessionRef = useRef(null);
 
+  // Load and restore saved conversations
   useEffect(() => {
     try {
       const saved = localStorage.getItem("speakwise_conversations");
+      const conversations = saved ? JSON.parse(saved) : [];
 
-      if (saved) {
-        setSavedConversations(JSON.parse(saved));
+      setSavedConversations(conversations);
+
+      const savedActiveId = localStorage.getItem(
+        "speakwise_active_conversation"
+      );
+
+      const activeConversation = conversations.find(
+        (item) => item.id === savedActiveId
+      );
+
+      if (activeConversation) {
+        setActiveConversationId(activeConversation.id);
+        setConversation(activeConversation.messages);
+
+        const lastAIMessage = [...activeConversation.messages]
+          .reverse()
+          .find((message) => message.role === "ai");
+
+        setAiMessage(lastAIMessage?.text || "Hi! How was your day?");
+      } else {
+        setActiveConversationId(crypto.randomUUID());
       }
     } catch (error) {
-      console.error("Failed to load saved conversations:", error);
+      console.error("Failed to restore conversations:", error);
+      setActiveConversationId(crypto.randomUUID());
+    } finally {
+      setIsConversationLoaded(true);
     }
   }, []);
 
-
-  
+  // Load practice history
   useEffect(() => {
     try {
       const saved = localStorage.getItem("speakwise_practice_history");
@@ -72,10 +111,10 @@ function App() {
     }
   }, []);
 
-
-
+  // Save conversation whenever it changes
   useEffect(() => {
     if (
+      !isConversationLoaded ||
       !activeConversationId ||
       !conversation.some((message) => message.role === "user")
     ) {
@@ -92,7 +131,8 @@ function App() {
         title:
           existing?.title ||
           conversation.find((message) => message.role === "user")?.text
-            ?.slice(0, 35) || "New Conversation",
+            ?.slice(0, 35) ||
+          "New Conversation",
         messages: conversation,
         updatedAt: new Date().toISOString(),
       };
@@ -105,16 +145,20 @@ function App() {
           )
         : [updatedConversation, ...previous];
 
-      localStorage.setItem(
-        "speakwise_conversations",
-        JSON.stringify(updated)
-      );
+      try {
+        localStorage.setItem(
+          "speakwise_conversations",
+          JSON.stringify(updated)
+        );
+      } catch (error) {
+        console.error("Failed to save conversation:", error);
+      }
 
       return updated;
     });
-  }, [conversation, activeConversationId]);
+  }, [conversation, activeConversationId, isConversationLoaded]);
 
-  
+  // Copy notification timeout
   useEffect(() => {
     if (!copyNotification) return;
 
@@ -125,8 +169,30 @@ function App() {
     return () => clearTimeout(timer);
   }, [copyNotification]);
 
+  // Save currently selected page
+  useEffect(() => {
+    try {
+      localStorage.setItem("speakwise_current_page", currentPage);
+    } catch (error) {
+      console.error("Failed to save current page:", error);
+    }
+  }, [currentPage]);
 
-  
+  // Save currently active conversation
+  useEffect(() => {
+    try {
+      if (activeConversationId) {
+        localStorage.setItem(
+          "speakwise_active_conversation",
+          activeConversationId
+        );
+      }
+    } catch (error) {
+      console.error("Failed to save active conversation:", error);
+    }
+  }, [activeConversationId]);
+
+  // Add a voice recording to the current practice session
   const addPracticeRecording = (data) => {
     if (!activePracticeSessionRef.current) {
       activePracticeSessionRef.current = {
@@ -139,16 +205,16 @@ function App() {
     setPracticeTurnCount((count) => count + 1);
   };
 
+  // End practice session and calculate summary
   const endPracticeSession = () => {
     const activeSession = activePracticeSessionRef.current;
 
     if (!activeSession || activeSession.recordings.length === 0) return;
 
     const recordings = activeSession.recordings;
+
     const average = (values) => {
-      const validValues = values
-        .map(Number)
-        .filter(Number.isFinite);
+      const validValues = values.map(Number).filter(Number.isFinite);
 
       if (validValues.length === 0) return 0;
 
@@ -158,15 +224,22 @@ function App() {
       );
     };
 
-    const speechResults = recordings.map((item) => item.speech_analysis || {});
-    const grammarResults = recordings.map((item) => item.grammar_analysis || {});
+    const speechResults = recordings.map(
+      (item) => item.speech_analysis || {}
+    );
+
+    const grammarResults = recordings.map(
+      (item) => item.grammar_analysis || {}
+    );
 
     const totalWords = speechResults.reduce(
-      (total, item) => total + (item.word_count || 0), 0
+      (total, item) => total + (item.word_count || 0),
+      0
     );
 
     const totalDuration = speechResults.reduce(
-      (total, item) => total + (item.duration_seconds || 0), 0
+      (total, item) => total + (item.duration_seconds || 0),
+      0
     );
 
     const allFillerWords = speechResults.flatMap(
@@ -181,16 +254,21 @@ function App() {
           ? Math.round((totalWords / totalDuration) * 60)
           : 0,
       filler_word_count: speechResults.reduce(
-        (total, item) => total + (item.filler_word_count || 0), 0
+        (total, item) => total + (item.filler_word_count || 0),
+        0
       ),
       filler_words: allFillerWords,
       pause_count: speechResults.reduce(
-        (total, item) => total + (item.pause_count || 0), 0
+        (total, item) => total + (item.pause_count || 0),
+        0
       ),
       total_pause_seconds: Number(
-        speechResults.reduce(
-          (total, item) => total + (item.total_pause_seconds || 0), 0
-        ).toFixed(1)
+        speechResults
+          .reduce(
+            (total, item) => total + (item.total_pause_seconds || 0),
+            0
+          )
+          .toFixed(1)
       ),
       longest_pause_seconds: Math.max(
         0,
@@ -199,8 +277,12 @@ function App() {
     };
 
     const combinedGrammarAnalysis = {
-      original: grammarResults.map((item) => item.original || "").join("\n"),
-      corrected: grammarResults.map((item) => item.corrected || "").join("\n"),
+      original: grammarResults
+        .map((item) => item.original || "")
+        .join("\n"),
+      corrected: grammarResults
+        .map((item) => item.corrected || "")
+        .join("\n"),
       has_errors: grammarResults.some((item) => item.has_errors),
       grammar_score: average(
         grammarResults
@@ -249,19 +331,13 @@ function App() {
     setStatus("Practice session completed!");
   };
 
-
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-
-  const activePracticeSessionRef = useRef(null);
-
-
+  // Start a new conversation
   const startNewConversation = () => {
-
     if (practiceTurnCount > 0) {
       setStatus("Please end your current practice session first.");
       return;
-    } 
+    }
+
     if (isRecording || isSending || isProcessingAudio) return;
 
     const newId = crypto.randomUUID();
@@ -281,12 +357,13 @@ function App() {
     setIsAnalysisOpen(false);
   };
 
-
+  // Open an existing conversation
   const openConversation = (item) => {
     if (practiceTurnCount > 0) {
       setStatus("Please end your current practice session first.");
       return;
     }
+
     if (isRecording || isSending || isProcessingAudio) return;
 
     setActiveConversationId(item.id);
@@ -296,9 +373,7 @@ function App() {
       .reverse()
       .find((message) => message.role === "ai");
 
-    setAiMessage(
-      lastAIMessage?.text || "Hi! How was your day?"
-    );
+    setAiMessage(lastAIMessage?.text || "Hi! How was your day?");
 
     setTypedMessage("");
     setTranscription("");
@@ -312,12 +387,11 @@ function App() {
     setIsAnalysisOpen(false);
   };
 
-
+  // Rename conversation
   const startRenamingConversation = (item) => {
     setRenamingConversationId(item.id);
     setRenameTitle(item.title);
   };
-
 
   const saveConversationTitle = (id) => {
     const trimmedTitle = renameTitle.trim();
@@ -326,9 +400,7 @@ function App() {
 
     setSavedConversations((previous) => {
       const updated = previous.map((item) =>
-        item.id === id
-          ? { ...item, title: trimmedTitle }
-          : item
+        item.id === id ? { ...item, title: trimmedTitle } : item
       );
 
       localStorage.setItem(
@@ -343,9 +415,16 @@ function App() {
     setRenameTitle("");
   };
 
-  
+  // Delete conversation
   const deleteConversation = (id) => {
-    if (isRecording || isSending || isProcessingAudio || practiceTurnCount > 0) return;
+    if (
+      isRecording ||
+      isSending ||
+      isProcessingAudio ||
+      practiceTurnCount > 0
+    ) {
+      return;
+    }
 
     const item = savedConversations.find(
       (conversation) => conversation.id === id
@@ -355,7 +434,6 @@ function App() {
       setConversationToDelete(item);
     }
   };
-
 
   const confirmDeleteConversation = () => {
     if (!conversationToDelete) return;
@@ -375,9 +453,7 @@ function App() {
 
     if (activeConversationId === id) {
       setActiveConversationId(crypto.randomUUID());
-      setConversation([
-        { role: "ai", text: "Hi! How was your day?" },
-      ]);
+      setConversation([{ role: "ai", text: "Hi! How was your day?" }]);
       setAiMessage("Hi! How was your day?");
       setTypedMessage("");
       setTranscription("");
@@ -396,11 +472,12 @@ function App() {
     setConversationToDelete(null);
   };
 
-
+  // Send typed message
   const sendTypedMessage = async (event) => {
     event.preventDefault();
 
     const text = typedMessage.trim();
+
     if (!text || isSending || isRecording || isProcessingAudio) return;
 
     const updatedHistory = [...conversation, { role: "user", text }];
@@ -425,10 +502,11 @@ function App() {
       }
 
       const data = await response.json();
+
       setAiMessage(data.response);
 
-      setConversation((prev) => [
-        ...prev,
+      setConversation((previous) => [
+        ...previous,
         { role: "ai", text: data.response },
       ]);
 
@@ -441,6 +519,7 @@ function App() {
     }
   };
 
+  // Start voice recording
   const startRecording = async () => {
     if (isSending || isProcessingAudio || isRecording) return;
 
@@ -491,6 +570,7 @@ function App() {
           setFluencyScore(data.fluency_score);
           setGrammarAnalysis(data.grammar_analysis);
           setCommunicationScore(data.communication_score);
+
           addPracticeRecording(data);
 
           const conversationHistory = [
@@ -498,8 +578,8 @@ function App() {
             { role: "user", text: data.transcription },
           ];
 
-          setConversation((prev) => [
-            ...prev,
+          setConversation((previous) => [
+            ...previous,
             { role: "user", text: data.transcription },
           ]);
 
@@ -522,10 +602,11 @@ function App() {
           }
 
           const conversationData = await conversationResponse.json();
+
           setAiMessage(conversationData.response);
 
-          setConversation((prev) => [
-            ...prev,
+          setConversation((previous) => [
+            ...previous,
             { role: "ai", text: conversationData.response },
           ]);
 
@@ -548,7 +629,7 @@ function App() {
     }
   };
 
-
+  // Stop voice recording
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
@@ -557,14 +638,13 @@ function App() {
     }
   };
 
-  
+  // Text to speech
   const speakMessage = (text) => {
     if (!("speechSynthesis" in window)) {
       setStatus("Text-to-speech is not supported in this browser.");
       return;
     }
 
-    // Stop any previous speech before starting another
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -575,13 +655,11 @@ function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
   };
 
-
-  
+  // Copy conversation
   const copyConversation = async () => {
     const conversationText = conversation
       .map((message) => {
@@ -609,8 +687,6 @@ function App() {
     }
   };
 
-
-
   const closeMobilePanels = () => {
     setIsSidebarOpen(false);
     setIsAnalysisOpen(false);
@@ -630,7 +706,6 @@ function App() {
           ☰
         </button>
 
-        
         <div className="brand">
           <span className="brand-icon" aria-hidden="true">
             <svg viewBox="0 0 48 48">
@@ -677,7 +752,7 @@ function App() {
 
       <div
         className={`workspace ${
-        currentPage === "progress" ? "progress-workspace" : ""
+          currentPage === "progress" ? "progress-workspace" : ""
         }`}
       >
         <aside className={`sidebar ${isSidebarOpen ? "sidebar-open" : ""}`}>
@@ -715,94 +790,109 @@ function App() {
             <span>▥</span> My Progress
           </button>
 
-          {currentPage === "conversation" && savedConversations.length > 0 && (
-            <>
-              <div className="sidebar-section-label">RECENT CHATS</div>
+          {currentPage === "conversation" &&
+            savedConversations.length > 0 && (
+              <>
+                <div className="sidebar-section-label">RECENT CHATS</div>
 
-              <div className="conversation-history-list">  
-                {savedConversations.map((item) => (
-                  <div key={item.id} className="history-row">
-                    {renamingConversationId === item.id ? (
-                      <form
-                        className="history-rename-form"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          saveConversationTitle(item.id);
-                        }}
-                      >
-                        <input
-                          value={renameTitle}
-                          onChange={(event) => setRenameTitle(event.target.value)}
-                          autoFocus
-                          aria-label="New conversation title"
-                          maxLength={60}
-                          placeholder="Conversation title"
-                        />
-
-                        <button type="submit" title="Save title">
-                          ✓
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Cancel rename"
-                          onClick={() => {
-                            setRenamingConversationId(null);
-                            setRenameTitle("");
+                <div className="conversation-history-list">
+                  {savedConversations.map((item) => (
+                    <div key={item.id} className="history-row">
+                      {renamingConversationId === item.id ? (
+                        <form
+                          className="history-rename-form"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            saveConversationTitle(item.id);
                           }}
                         >
-                          ×
-                        </button>
-                      </form>
-                    ) : (
-                      <>
-                        <button
-                          className={`sidebar-item history-item ${
-                            activeConversationId === item.id ? "active" : ""
-                          }`}
-                          onClick={() => openConversation(item)}
-                          disabled={
-                            isRecording || isSending || isProcessingAudio || practiceTurnCount > 0
-                          }
-                          title={item.title}
-                        >
-                          <span>◷</span>
-                          <span className="history-title">{item.title}</span>
-                        </button>
+                          <input
+                            value={renameTitle}
+                            onChange={(event) =>
+                              setRenameTitle(event.target.value)
+                            }
+                            autoFocus
+                            aria-label="New conversation title"
+                            maxLength={60}
+                            placeholder="Conversation title"
+                          />
 
-                        <button
-                          className="history-action-button"
-                          title="Rename conversation"
-                          aria-label={`Rename ${item.title}`}
-                          onClick={() => startRenamingConversation(item)}
-                          disabled={
-                            isRecording || isSending || isProcessingAudio
-                          }
-                        >
-                          ✎
-                        </button>
-                       
-                        <button
-                          className="history-action-button history-delete-button"
-                          title="Delete conversation"
-                          aria-label={`Delete ${item.title}`}
-                          onClick={() => deleteConversation(item.id)}
-                          disabled={
-                            isRecording || isSending || isProcessingAudio || practiceTurnCount > 0
-                          }
-                        >
-                          🗑
-                        </button>
+                          <button type="submit" title="Save title">
+                            ✓
+                          </button>
 
-                      </>
-                    )}
-                  </div>
-                ))}
+                          <button
+                            type="button"
+                            title="Cancel rename"
+                            onClick={() => {
+                              setRenamingConversationId(null);
+                              setRenameTitle("");
+                            }}
+                          >
+                            ×
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <button
+                            className={`sidebar-item history-item ${
+                              activeConversationId === item.id
+                                ? "active"
+                                : ""
+                            }`}
+                            onClick={() => openConversation(item)}
+                            disabled={
+                              isRecording ||
+                              isSending ||
+                              isProcessingAudio ||
+                              practiceTurnCount > 0
+                            }
+                            title={item.title}
+                          >
+                            <span>◷</span>
+                            <span className="history-title">
+                              {item.title}
+                            </span>
+                          </button>
 
-              </div>
-            </>
-          )}
-          
+                          <button
+                            className="history-action-button"
+                            title="Rename conversation"
+                            aria-label={`Rename ${item.title}`}
+                            onClick={() =>
+                              startRenamingConversation(item)
+                            }
+                            disabled={
+                              isRecording ||
+                              isSending ||
+                              isProcessingAudio
+                            }
+                          >
+                            ✎
+                          </button>
+
+                          <button
+                            className="history-action-button history-delete-button"
+                            title="Delete conversation"
+                            aria-label={`Delete ${item.title}`}
+                            onClick={() => deleteConversation(item.id)}
+                            disabled={
+                              isRecording ||
+                              isSending ||
+                              isProcessingAudio ||
+                              practiceTurnCount > 0
+                            }
+                          >
+                            🗑
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
           <div className="sidebar-bottom">
             <div className="sidebar-avatar">AI</div>
             <div>
@@ -812,7 +902,6 @@ function App() {
           </div>
         </aside>
 
-        
         {currentPage === "conversation" && (
           <main className="chat-panel">
             <div className="chat-heading">
@@ -820,6 +909,7 @@ function App() {
                 <h2>Daily Conversation</h2>
                 <p>Practise naturally, one conversation at a time.</p>
               </div>
+
               <div className="chat-heading-actions">
                 <span className="level-pill">Intermediate</span>
 
@@ -827,7 +917,9 @@ function App() {
                   type="button"
                   className="copy-conversation-button"
                   onClick={copyConversation}
-                  disabled={!conversation.some((message) => message.role === "user")}
+                  disabled={
+                    !conversation.some((message) => message.role === "user")
+                  }
                   title="Copy conversation"
                 >
                   📋 Copy
@@ -851,6 +943,7 @@ function App() {
                     <div className="message-label">
                       {message.role === "ai" ? "AI Coach" : "You"}
                     </div>
+
                     <div className="message-bubble">{message.text}</div>
 
                     {message.role === "ai" && (
@@ -868,17 +961,18 @@ function App() {
                           onClick={stopSpeaking}
                           title="Stop speaking"
                         >
-                        ⏹ Stop
+                          ⏹ Stop
                         </button>
                       </div>
                     )}
-
                   </div>
                 </div>
               ))}
 
               {isSending && (
-                <div className="thinking-indicator">AI Coach is thinking...</div>
+                <div className="thinking-indicator">
+                  AI Coach is thinking...
+                </div>
               )}
             </div>
 
@@ -886,18 +980,30 @@ function App() {
               <div className="practice-mode-selector">
                 <button
                   type="button"
-                  className={practiceMode === "voice" ? "mode-button active" : "mode-button"}
+                  className={
+                    practiceMode === "voice"
+                      ? "mode-button active"
+                      : "mode-button"
+                  }
                   onClick={() => setPracticeMode("voice")}
-                  disabled={isSending || isRecording || isProcessingAudio}
+                  disabled={
+                    isSending || isRecording || isProcessingAudio
+                  }
                 >
                   🎤 Voice Mode
                 </button>
 
                 <button
                   type="button"
-                  className={practiceMode === "typing" ? "mode-button active" : "mode-button"}
+                  className={
+                    practiceMode === "typing"
+                      ? "mode-button active"
+                      : "mode-button"
+                  }
                   onClick={() => setPracticeMode("typing")}
-                  disabled={isSending || isRecording || isProcessingAudio}
+                  disabled={
+                    isSending || isRecording || isProcessingAudio
+                  }
                 >
                   ⌨️ Typing Mode
                 </button>
@@ -911,7 +1017,9 @@ function App() {
                     type="button"
                     className="end-practice-button"
                     onClick={endPracticeSession}
-                    disabled={isRecording || isProcessingAudio || isSending}
+                    disabled={
+                      isRecording || isProcessingAudio || isSending
+                    }
                   >
                     End Practice
                   </button>
@@ -919,31 +1027,37 @@ function App() {
               </div>
 
               {practiceMode === "typing" && (
-                <form className="message-form" onSubmit={sendTypedMessage}>
+                <form
+                  className="message-form"
+                  onSubmit={sendTypedMessage}
+                >
                   <input
                     type="text"
                     value={typedMessage}
-                    onChange={(event) => setTypedMessage(event.target.value)}
+                    onChange={(event) =>
+                      setTypedMessage(event.target.value)
+                    }
                     placeholder="Type your answer here..."
-                    disabled={isSending || isRecording || isProcessingAudio}
+                    disabled={
+                      isSending || isRecording || isProcessingAudio
+                    }
                     aria-label="Type your message"
                   />
+
                   <button
                     type="submit"
                     className="send-button"
-                    disabled={!typedMessage.trim() || isSending || isRecording || isProcessingAudio }
+                    disabled={
+                      !typedMessage.trim() ||
+                      isSending ||
+                      isRecording ||
+                      isProcessingAudio
+                    }
                   >
                     {isSending ? "..." : "Send"}
-                  
-                    {/* {isProcessingAudio && !isRecording && (
-                      <div className="thinking-indicator">
-                        Processing your voice...
-                      </div>
-                    )} */}
-
                   </button>
                 </form>
-              )}  
+              )}
 
               {practiceMode === "voice" && (
                 <div className="voice-row">
@@ -956,10 +1070,14 @@ function App() {
                       <span>🎤</span> Start Speaking
                     </button>
                   ) : (
-                    <button className="record-button recording" onClick={stopRecording}>
+                    <button
+                      className="record-button recording"
+                      onClick={stopRecording}
+                    >
                       <span>⏹</span> Stop Recording
                     </button>
                   )}
+
                   <span className="voice-hint">
                     {isRecording
                       ? "Listening to your answer"
@@ -967,11 +1085,9 @@ function App() {
                   </span>
                 </div>
               )}
-
             </div>
           </main>
         )}
-
 
         {currentPage === "progress" && (
           <Progress
@@ -983,7 +1099,6 @@ function App() {
           />
         )}
 
-        
         {currentPage === "conversation" && (
           <aside
             className={`analysis-panel ${
@@ -995,6 +1110,7 @@ function App() {
                 <h2>Your Practice</h2>
                 <p>Your latest learning insights</p>
               </div>
+
               <button
                 className="close-analysis-button"
                 onClick={() => setIsAnalysisOpen(false)}
@@ -1007,7 +1123,10 @@ function App() {
             <section className="insight-card goal-card">
               <div className="card-eyebrow">TODAY'S GOAL</div>
               <h3>Speak with confidence</h3>
-              <p>Try to express your ideas clearly in complete sentences.</p>
+              <p>
+                Try to express your ideas clearly in complete sentences.
+              </p>
+
               <div className="goal-progress-track">
                 <div
                   className={`goal-progress-fill ${
@@ -1015,8 +1134,11 @@ function App() {
                   }`}
                 />
               </div>
+
               <span className="goal-caption">
-                {speechAnalysis ? "First practice completed" : "Start a conversation to begin"}
+                {speechAnalysis
+                  ? "First practice completed"
+                  : "Start a conversation to begin"}
               </span>
             </section>
 
@@ -1034,6 +1156,7 @@ function App() {
                     : "--/100"}
                 </strong>
               </div>
+
               <div className="score-track">
                 <div
                   className="score-fill communication-fill"
@@ -1054,6 +1177,7 @@ function App() {
                     : "--/100"}
                 </strong>
               </div>
+
               <div className="score-track">
                 <div
                   className="score-fill grammar-fill"
@@ -1069,14 +1193,20 @@ function App() {
               <div className="score-row">
                 <span>Fluency</span>
                 <strong>
-                  {fluencyScore !== null ? `${fluencyScore}/100` : "--/100"}
+                  {fluencyScore !== null
+                    ? `${fluencyScore}/100`
+                    : "--/100"}
                 </strong>
               </div>
+
               <div className="score-track">
                 <div
                   className="score-fill fluency-fill"
                   style={{
-                    width: `${Math.max(0, Math.min(100, fluencyScore ?? 0))}%`,
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, fluencyScore ?? 0)
+                    )}%`,
                   }}
                 />
               </div>
@@ -1106,7 +1236,10 @@ function App() {
             {!grammarAnalysis && !speechAnalysis && (
               <div className="empty-analysis">
                 <span>◷</span>
-                <p>Your grammar corrections and speech insights will appear here after you speak.</p>
+                <p>
+                  Your grammar corrections and speech insights will appear
+                  here after you speak.
+                </p>
               </div>
             )}
 
@@ -1132,7 +1265,9 @@ function App() {
                 <p className="detail-text">{grammarAnalysis.original}</p>
 
                 <p className="detail-label">Corrected</p>
-                <p className="corrected-text">{grammarAnalysis.corrected}</p>
+                <p className="corrected-text">
+                  {grammarAnalysis.corrected}
+                </p>
 
                 <p>
                   <strong>Grammar issues:</strong>{" "}
@@ -1162,26 +1297,32 @@ function App() {
                   <span>Words spoken</span>
                   <strong>{speechAnalysis.word_count}</strong>
                 </div>
+
                 <div className="metric-row">
                   <span>Duration</span>
                   <strong>{speechAnalysis.duration_seconds}s</strong>
                 </div>
+
                 <div className="metric-row">
                   <span>Speaking rate</span>
                   <strong>{speechAnalysis.speaking_rate_wpm} WPM</strong>
                 </div>
+
                 <div className="metric-row">
                   <span>Filler words</span>
                   <strong>{speechAnalysis.filler_word_count}</strong>
                 </div>
+
                 <div className="metric-row">
                   <span>Pauses</span>
                   <strong>{speechAnalysis.pause_count}</strong>
                 </div>
+
                 <div className="metric-row">
                   <span>Total pause time</span>
                   <strong>{speechAnalysis.total_pause_seconds}s</strong>
                 </div>
+
                 <div className="metric-row">
                   <span>Longest pause</span>
                   <strong>{speechAnalysis.longest_pause_seconds}s</strong>
@@ -1215,7 +1356,6 @@ function App() {
         tabIndex={isSidebarOpen || isAnalysisOpen ? 0 : -1}
       />
 
-
       {sessionSummary && (
         <div className="session-summary-overlay">
           <div
@@ -1243,7 +1383,9 @@ function App() {
             <div className="summary-score-grid">
               <div className="summary-score-card">
                 <span>Communication</span>
-                <strong>{sessionSummary.communicationScore}/100</strong>
+                <strong>
+                  {sessionSummary.communicationScore}/100
+                </strong>
               </div>
 
               <div className="summary-score-card">
@@ -1262,16 +1404,23 @@ function App() {
                 <strong>{sessionSummary.utteranceCount}</strong>
                 <span>Speaking turns</span>
               </div>
+
               <div>
                 <strong>{sessionSummary.speechAnalysis.word_count}</strong>
                 <span>Words spoken</span>
               </div>
+
               <div>
-                <strong>{sessionSummary.speechAnalysis.speaking_rate_wpm}</strong>
+                <strong>
+                  {sessionSummary.speechAnalysis.speaking_rate_wpm}
+                </strong>
                 <span>Words per minute</span>
               </div>
+
               <div>
-                <strong>{sessionSummary.speechAnalysis.filler_word_count}</strong>
+                <strong>
+                  {sessionSummary.speechAnalysis.filler_word_count}
+                </strong>
                 <span>Filler words</span>
               </div>
             </div>
@@ -1282,11 +1431,13 @@ function App() {
 
               {sessionSummary.grammarAnalysis.changes.length > 0 && (
                 <ul>
-                  {sessionSummary.grammarAnalysis.changes.map((change, index) => (
-                    <li key={index}>
-                      “{change.original}” → “{change.corrected}”
-                    </li>
-                  ))}
+                  {sessionSummary.grammarAnalysis.changes.map(
+                    (change, index) => (
+                      <li key={index}>
+                        “{change.original}” → “{change.corrected}”
+                      </li>
+                    )
+                  )}
                 </ul>
               )}
 
@@ -1299,18 +1450,31 @@ function App() {
               <h3>Things to Practise</h3>
               <ul>
                 {sessionSummary.fluencyScore < 70 && (
-                  <li>Practise speaking more smoothly and maintaining a steady pace.</li>
+                  <li>
+                    Practise speaking more smoothly and maintaining a
+                    steady pace.
+                  </li>
                 )}
+
                 {sessionSummary.grammarScore < 70 && (
-                  <li>Focus on sentence structure and grammar accuracy.</li>
+                  <li>
+                    Focus on sentence structure and grammar accuracy.
+                  </li>
                 )}
+
                 {sessionSummary.speechAnalysis.filler_word_count > 3 && (
-                  <li>Try reducing filler words by pausing briefly before speaking.</li>
+                  <li>
+                    Try reducing filler words by pausing briefly before
+                    speaking.
+                  </li>
                 )}
+
                 {sessionSummary.fluencyScore >= 70 &&
                   sessionSummary.grammarScore >= 70 &&
                   sessionSummary.speechAnalysis.filler_word_count <= 3 && (
-                    <li>Keep practising to maintain your progress.</li>
+                    <li>
+                      Keep practising to maintain your progress.
+                    </li>
                   )}
               </ul>
             </div>
@@ -1326,12 +1490,13 @@ function App() {
         </div>
       )}
 
-      
       {copyNotification && (
         <div
           className={`copy-toast ${copyNotification.type}`}
           role={copyNotification.type === "error" ? "alert" : "status"}
-          aria-live={copyNotification.type === "error" ? "assertive" : "polite"}
+          aria-live={
+            copyNotification.type === "error" ? "assertive" : "polite"
+          }
         >
           <span className="copy-toast-icon" aria-hidden="true">
             {copyNotification.type === "success" ? "✓" : "!"}
@@ -1353,7 +1518,6 @@ function App() {
         </div>
       )}
 
-      
       {conversationToDelete && (
         <div
           className="delete-modal-overlay"
@@ -1368,19 +1532,18 @@ function App() {
           >
             <div className="delete-modal-heading">
               <div className="delete-modal-icon">🗑</div>
-                <div>
-                  <h2 id="delete-modal-title">Delete conversation?</h2>
-                  <p className="delete-modal-warning">
-                    This action cannot be undone.
-                  </p>
-                </div>
-              </div>
 
-            
+              <div>
+                <h2 id="delete-modal-title">Delete conversation?</h2>
+                <p className="delete-modal-warning">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
 
             <p className="delete-modal-description">
-              Are you sure you want to delete this conversation?
-              Your saved messages will be permanently removed from this device.
+              Are you sure you want to delete this conversation? Your saved
+              messages will be permanently removed from this device.
             </p>
 
             <div className="delete-modal-chat-title">
@@ -1406,7 +1569,6 @@ function App() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
