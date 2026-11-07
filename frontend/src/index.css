@@ -1884,3 +1884,29 @@ input:focus-visible {
     animation: none;
   }
 }
+
+
+
+/* -------------- Add scrolling to Recent Chats -----------------------*/
+
+.conversation-history-list {
+  max-height: 45vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b transparent;
+}
+
+.conversation-history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.conversation-history-list::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 10px;
+}
+
+.conversation-history-list::-webkit-scrollbar-track {
+  background: transparent;
+}

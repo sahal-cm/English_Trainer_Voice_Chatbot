@@ -197,6 +197,7 @@ function App() {
     if (!activePracticeSessionRef.current) {
       activePracticeSessionRef.current = {
         startedAt: new Date().toISOString(),
+        conversationId: activeConversationId,
         recordings: [],
       };
     }
@@ -294,6 +295,7 @@ function App() {
 
     const summary = {
       id: crypto.randomUUID(),
+      conversationId: activeSession.conversationId,
       date: activeSession.startedAt,
       endedAt: new Date().toISOString(),
       utteranceCount: recordings.length,
@@ -445,6 +447,21 @@ function App() {
 
       localStorage.setItem(
         "speakwise_conversations",
+        JSON.stringify(updated)
+      );
+
+      return updated;
+    });
+
+
+    // Delete practice history associated with this conversation
+    setPracticeHistory((previous) => {
+      const updated = previous.filter(
+        (session) => session.conversationId !== id
+      );
+
+      localStorage.setItem(
+        "speakwise_practice_history",
         JSON.stringify(updated)
       );
 
@@ -1542,8 +1559,9 @@ function App() {
             </div>
 
             <p className="delete-modal-description">
-              Are you sure you want to delete this conversation? Your saved
-              messages will be permanently removed from this device.
+              Are you sure you want to delete this conversation? Its saved messages
+              and associated practice history will be permanently removed from
+              this device.
             </p>
 
             <div className="delete-modal-chat-title">
