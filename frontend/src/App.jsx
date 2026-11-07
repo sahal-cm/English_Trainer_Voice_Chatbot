@@ -56,11 +56,26 @@ function App() {
   const [renamingConversationId, setRenamingConversationId] = useState(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [conversationToDelete, setConversationToDelete] = useState(null);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [openConversationMenuId, setOpenConversationMenuId] = useState(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const savedWidth = Number(localStorage.getItem("speakwise_sidebar_width"));
+      return Number.isFinite(savedWidth) && savedWidth >= 190 && savedWidth <= 420
+        ? savedWidth
+        : 220;
+    } catch (error) {
+      return 220;
+    }
+  });
+  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
 
   // Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const activePracticeSessionRef = useRef(null);
+  const sidebarResizeStartRef = useRef({ startX: 0, startWidth: 220 });
+  const conversationMenuRef = useRef(null);
 
   // Load and restore saved conversations
   useEffect(() => {
@@ -157,6 +172,63 @@ function App() {
       return updated;
     });
   }, [conversation, activeConversationId, isConversationLoaded]);
+
+  // Persist the user's preferred sidebar width
+  useEffect(() => {
+    try {
+      localStorage.setItem("speakwise_sidebar_width", String(sidebarWidth));
+    } catch (error) {
+      console.error("Failed to save sidebar width:", error);
+    }
+  }, [sidebarWidth]);
+
+  // Handle sidebar resizing
+  useEffect(() => {
+    if (!isSidebarResizing) return;
+
+    const handlePointerMove = (event) => {
+      const delta = event.clientX - sidebarResizeStartRef.current.startX;
+      const nextWidth = Math.min(
+        420,
+        Math.max(190, sidebarResizeStartRef.current.startWidth + delta)
+      );
+      setSidebarWidth(nextWidth);
+    };
+
+    const stopResizing = () => setIsSidebarResizing(false);
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, [isSidebarResizing]);
+
+  // Close a conversation menu when clicking outside it
+  useEffect(() => {
+    if (!openConversationMenuId) return;
+
+    const handleOutsideClick = (event) => {
+      if (
+        conversationMenuRef.current &&
+        !conversationMenuRef.current.contains(event.target)
+      ) {
+        setOpenConversationMenuId(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsideClick);
+    return () =>
+      document.removeEventListener("pointerdown", handleOutsideClick);
+  }, [openConversationMenuId]);
 
   // Copy notification timeout
   useEffect(() => {
@@ -357,6 +429,7 @@ function App() {
     setStatus("Ready to speak or type");
     setIsSidebarOpen(false);
     setIsAnalysisOpen(false);
+    setOpenConversationMenuId(null);
   };
 
   // Open an existing conversation
@@ -387,10 +460,12 @@ function App() {
     setStatus("Conversation loaded");
     setIsSidebarOpen(false);
     setIsAnalysisOpen(false);
+    setOpenConversationMenuId(null);
   };
 
   // Rename conversation
   const startRenamingConversation = (item) => {
+    setOpenConversationMenuId(null);
     setRenamingConversationId(item.id);
     setRenameTitle(item.title);
   };
@@ -709,6 +784,19 @@ function App() {
     setIsAnalysisOpen(false);
   };
 
+  const filteredConversations = savedConversations.filter((item) => {
+    const searchText = conversationSearch.trim().toLowerCase();
+    if (!searchText) return true;
+
+    const messageText = Array.isArray(item.messages)
+      ? item.messages.map((message) => message.text || "").join(" ")
+      : "";
+
+    return `${item.title || ""} ${messageText}`
+      .toLowerCase()
+      .includes(searchText);
+  });
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -771,6 +859,7 @@ function App() {
         className={`workspace ${
           currentPage === "progress" ? "progress-workspace" : ""
         }`}
+        style={{ "--sidebar-width": `${sidebarWidth}px` }}
       >
         <aside className={`sidebar ${isSidebarOpen ? "sidebar-open" : ""}`}>
           <button
@@ -807,13 +896,38 @@ function App() {
             <span>▥</span> My Progress
           </button>
 
-          {currentPage === "conversation" &&
-            savedConversations.length > 0 && (
-              <>
-                <div className="sidebar-section-label">RECENT CHATS</div>
+          {currentPage === "conversation" && savedConversations.length > 0 && (
+            <>
+              <div className="sidebar-section-label">RECENT CHATS</div>
 
-                <div className="conversation-history-list">
-                  {savedConversations.map((item) => (
+              <div className="conversation-search-wrap">
+                <span className="conversation-search-icon" aria-hidden="true">
+                  ⌕
+                </span>
+                <input
+                  className="conversation-search-input"
+                  type="search"
+                  value={conversationSearch}
+                  onChange={(event) => setConversationSearch(event.target.value)}
+                  placeholder="Search conversations..."
+                  aria-label="Search conversations"
+                />
+                {conversationSearch && (
+                  <button
+                    type="button"
+                    className="conversation-search-clear"
+                    onClick={() => setConversationSearch("")}
+                    aria-label="Clear search"
+                    title="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="conversation-history-list">
+                {filteredConversations.length > 0 ? (
+                  filteredConversations.map((item) => (
                     <div key={item.id} className="history-row">
                       {renamingConversationId === item.id ? (
                         <form
@@ -825,22 +939,21 @@ function App() {
                         >
                           <input
                             value={renameTitle}
-                            onChange={(event) =>
-                              setRenameTitle(event.target.value)
-                            }
+                            onChange={(event) => setRenameTitle(event.target.value)}
                             autoFocus
                             aria-label="New conversation title"
                             maxLength={60}
                             placeholder="Conversation title"
                           />
 
-                          <button type="submit" title="Save title">
+                          <button type="submit" title="Save title" aria-label="Save title">
                             ✓
                           </button>
 
                           <button
                             type="button"
                             title="Cancel rename"
+                            aria-label="Cancel rename"
                             onClick={() => {
                               setRenamingConversationId(null);
                               setRenameTitle("");
@@ -853,9 +966,7 @@ function App() {
                         <>
                           <button
                             className={`sidebar-item history-item ${
-                              activeConversationId === item.id
-                                ? "active"
-                                : ""
+                              activeConversationId === item.id ? "active" : ""
                             }`}
                             onClick={() => openConversation(item)}
                             disabled={
@@ -867,48 +978,82 @@ function App() {
                             title={item.title}
                           >
                             <span>◷</span>
-                            <span className="history-title">
-                              {item.title}
-                            </span>
+                            <span className="history-title">{item.title}</span>
                           </button>
 
-                          <button
-                            className="history-action-button"
-                            title="Rename conversation"
-                            aria-label={`Rename ${item.title}`}
-                            onClick={() =>
-                              startRenamingConversation(item)
-                            }
-                            disabled={
-                              isRecording ||
-                              isSending ||
-                              isProcessingAudio
+                          <div
+                            className="history-menu-wrap"
+                            ref={
+                              openConversationMenuId === item.id
+                                ? conversationMenuRef
+                                : null
                             }
                           >
-                            ✎
-                          </button>
+                            <button
+                              type="button"
+                              className="history-menu-trigger"
+                              title="Conversation options"
+                              aria-label={`Options for ${item.title}`}
+                              aria-haspopup="menu"
+                              aria-expanded={openConversationMenuId === item.id}
+                              onClick={() =>
+                                setOpenConversationMenuId((current) =>
+                                  current === item.id ? null : item.id
+                                )
+                              }
+                            >
+                              ⋮
+                            </button>
 
-                          <button
-                            className="history-action-button history-delete-button"
-                            title="Delete conversation"
-                            aria-label={`Delete ${item.title}`}
-                            onClick={() => deleteConversation(item.id)}
-                            disabled={
-                              isRecording ||
-                              isSending ||
-                              isProcessingAudio ||
-                              practiceTurnCount > 0
-                            }
-                          >
-                            🗑
-                          </button>
+                            {openConversationMenuId === item.id && (
+                              <div className="history-options-menu" role="menu">
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => startRenamingConversation(item)}
+                                  disabled={
+                                    isRecording ||
+                                    isSending ||
+                                    isProcessingAudio
+                                  }
+                                >
+                                  <span aria-hidden="true">✎</span>
+                                  Rename
+                                </button>
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="history-menu-delete"
+                                  onClick={() => {
+                                    setOpenConversationMenuId(null);
+                                    deleteConversation(item.id);
+                                  }}
+                                  disabled={
+                                    isRecording ||
+                                    isSending ||
+                                    isProcessingAudio ||
+                                    practiceTurnCount > 0
+                                  }
+                                >
+                                  <span aria-hidden="true">⌫</span>
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
-                  ))}
-                </div>
-              </>
-            )}
+                  ))
+                ) : (
+                  <p className="conversation-search-empty">
+                    No conversations found.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="sidebar-bottom">
             <div className="sidebar-avatar">AI</div>
@@ -917,6 +1062,37 @@ function App() {
               <p>Speaking practice</p>
             </div>
           </div>
+
+          <div
+            className={`sidebar-resize-handle ${
+              isSidebarResizing ? "resizing" : ""
+            }`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            aria-valuemin={190}
+            aria-valuemax={420}
+            aria-valuenow={Math.round(sidebarWidth)}
+            tabIndex={0}
+            onPointerDown={(event) => {
+              if (window.matchMedia("(max-width: 800px)").matches) return;
+              event.preventDefault();
+              sidebarResizeStartRef.current = {
+                startX: event.clientX,
+                startWidth: sidebarWidth,
+              };
+              setIsSidebarResizing(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                const change = event.key === "ArrowRight" ? 10 : -10;
+                setSidebarWidth((width) =>
+                  Math.min(420, Math.max(190, width + change))
+                );
+              }
+            }}
+          />
         </aside>
 
         {currentPage === "conversation" && (
