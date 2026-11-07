@@ -19,6 +19,7 @@ function Progress({
   });
 
   const [showSpeechDetails, setShowSpeechDetails] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
 
   const getScore = (value) => {
     if (value === null || value === undefined || value === "") {
@@ -31,12 +32,55 @@ function Progress({
 
   const getAverage = (key) => {
     const scores = practiceHistory
+      .filter(
+        (session) =>
+          session[key] !== null &&
+          session[key] !== undefined &&
+          session[key] !== ""
+      )
       .map((session) => Number(session[key]))
       .filter((score) => Number.isFinite(score) && score >= 0);
 
     if (!scores.length) return null;
 
     return scores.reduce((total, score) => total + score, 0) / scores.length;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return "Date unavailable";
+
+    const parsed = new Date(date);
+
+    return Number.isNaN(parsed.getTime())
+      ? "Date unavailable"
+      : parsed.toLocaleDateString(undefined, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+  };
+
+  const formatTime = (date) => {
+    if (!date) return "";
+
+    const parsed = new Date(date);
+
+    return Number.isNaN(parsed.getTime())
+      ? ""
+      : parsed.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  };
+
+  const getMetric = (value, suffix = "") => {
+    if (value === null || value === undefined || value === "") {
+      return "—";
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number) ? `${number}${suffix}` : "—";
   };
 
   const averageFluency = getAverage("fluencyScore");
@@ -65,7 +109,13 @@ function Progress({
 
   const goalProgress = Math.min((todaySessions / dailyGoal) * 100, 100);
 
-  const recentSessions = [...practiceHistory].slice(-10);
+  // App.jsx stores the newest session first.
+  // Use the latest ten sessions in chronological order for the chart.
+  const recentSessions = [...practiceHistory].slice(0, 10).reverse();
+
+  const selectedSession = practiceHistory.find(
+    (session) => session.id === selectedSessionId
+  );
 
   const getChartY = (score) => {
     const value = Number(score);
@@ -81,6 +131,288 @@ function Progress({
       label: "Communication",
     },
   ];
+
+  const getSuggestions = (session) => {
+    const suggestions = [];
+    const speech = session.speechAnalysis || {};
+    const grammar = session.grammarAnalysis || {};
+
+    const fluency = Number(session.fluencyScore);
+    const grammarScore = Number(session.grammarScore);
+    const communication = Number(session.communicationScore);
+
+    if (Number.isFinite(grammarScore) && grammarScore < 80) {
+      suggestions.push(
+        "Focus on sentence structure, verb tenses and grammatical accuracy."
+      );
+    }
+
+    if (Number.isFinite(fluency) && fluency < 70) {
+      suggestions.push(
+        "Practise speaking in complete sentences and maintain a smooth speaking flow."
+      );
+    }
+
+    if (Number.isFinite(communication) && communication < 70) {
+      suggestions.push(
+        "Work on expressing your ideas clearly and adding relevant details to your answers."
+      );
+    }
+
+    if (Number(speech.filler_word_count) > 3) {
+      suggestions.push(
+        "Try reducing filler words such as um, uh and like. Take a short pause before responding."
+      );
+    }
+
+    if (Number(speech.pause_count) > 5) {
+      suggestions.push(
+        "Practise connecting your sentences to reduce frequent interruptions while speaking."
+      );
+    }
+
+    if (Number(speech.speaking_rate_wpm) > 180) {
+      suggestions.push(
+        "Try speaking slightly slower so your words remain clear and easy to understand."
+      );
+    }
+
+    if (
+      Array.isArray(grammar.changes) &&
+      grammar.changes.length > 0
+    ) {
+      suggestions.push(
+        "Review your corrected sentences and practise using the corrected sentence structures in your next conversation."
+      );
+    }
+
+    if (suggestions.length === 0) {
+      suggestions.push(
+        "Keep practising regularly and focus on maintaining your current performance."
+      );
+    }
+
+    return suggestions;
+  };
+
+  // Detailed report view
+  if (selectedSession) {
+    const session = selectedSession;
+    const speech = session.speechAnalysis || {};
+    const grammar = session.grammarAnalysis || {};
+    const changes = Array.isArray(grammar.changes) ? grammar.changes : [];
+
+    const originalText = grammar.original || session.transcription || "";
+    const correctedText = grammar.corrected || "";
+
+    return (
+      <div className="progress-page">
+        <header className="progress-header detail-report-header">
+          <div>
+            <h1>Practice Session Report</h1>
+            <p>
+              {formatDate(session.date)}
+              {formatTime(session.date) && ` · ${formatTime(session.date)}`}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="back-to-history-button"
+            onClick={() => setSelectedSessionId(null)}
+          >
+            ← Back to History
+          </button>
+        </header>
+
+        {/* Session scores */}
+        <section className="progress-cards detail-score-cards">
+          <div className="progress-card">
+            <p>Communication</p>
+            <h2>{getScore(session.communicationScore)}</h2>
+            <span>Communication performance</span>
+          </div>
+
+          <div className="progress-card">
+            <p>Fluency</p>
+            <h2>{getScore(session.fluencyScore)}</h2>
+            <span>Speaking fluency</span>
+          </div>
+
+          <div className="progress-card">
+            <p>Grammar</p>
+            <h2>{getScore(session.grammarScore)}</h2>
+            <span>Grammar accuracy</span>
+          </div>
+
+          <div className="progress-card">
+            <p>Speaking Turns</p>
+            <h2>{getMetric(session.utteranceCount)}</h2>
+            <span>Recorded speaking responses</span>
+          </div>
+        </section>
+
+        {/* Speech statistics */}
+        <section className="progress-panel detail-report-panel">
+          <div className="progress-panel-heading">
+            <div>
+              <h2>Speaking Statistics</h2>
+              <p>Detailed breakdown of your speaking performance.</p>
+            </div>
+            <span className="progress-panel-icon">◷</span>
+          </div>
+
+          <div className="detail-stat-grid">
+            <div className="detail-stat-card">
+              <span>Total Words</span>
+              <strong>{getMetric(speech.word_count)}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Speaking Speed</span>
+              <strong>{getMetric(speech.speaking_rate_wpm, " WPM")}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Duration</span>
+              <strong>{getMetric(speech.duration_seconds, " sec")}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Filler Words</span>
+              <strong>{getMetric(speech.filler_word_count)}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Number of Pauses</span>
+              <strong>{getMetric(speech.pause_count)}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Total Pause Duration</span>
+              <strong>{getMetric(speech.total_pause_seconds, " sec")}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Longest Pause</span>
+              <strong>{getMetric(speech.longest_pause_seconds, " sec")}</strong>
+            </div>
+
+            <div className="detail-stat-card">
+              <span>Grammar Issues</span>
+              <strong>{changes.length}</strong>
+            </div>
+          </div>
+
+          <div className="detail-subsection">
+            <h3>Detected Filler Words</h3>
+            {Array.isArray(speech.filler_words) &&
+            speech.filler_words.length > 0 ? (
+              <div className="filler-word-list">
+                {speech.filler_words.map((word, index) => (
+                  <span key={index}>{word}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="detail-muted">No filler words detected.</p>
+            )}
+          </div>
+        </section>
+
+        {/* Original and corrected transcription */}
+        <section className="progress-panel detail-report-panel">
+          <div className="progress-panel-heading">
+            <div>
+              <h2>Transcription & Grammar Review</h2>
+              <p>Compare what you said with the corrected version.</p>
+            </div>
+          </div>
+
+          <div className="transcription-grid">
+            <div className="transcription-box original-transcription">
+              <h3>Original Transcription</h3>
+              <p>
+                {originalText || "No original transcription available."}
+              </p>
+            </div>
+
+            <div className="transcription-box corrected-transcription">
+              <h3>Corrected Sentences</h3>
+              <p>
+                {correctedText || "No corrected sentences available."}
+              </p>
+            </div>
+          </div>
+
+          <div className="detail-subsection grammar-mistakes-section">
+            <h3>Detected Grammar Mistakes</h3>
+
+            {changes.length > 0 ? (
+              <div className="grammar-changes-list">
+                {changes.map((change, index) => (
+                  <div className="grammar-change-item" key={index}>
+                    <div className="grammar-change-number">
+                      {index + 1}
+                    </div>
+
+                    <div className="grammar-change-content">
+                      <div>
+                        <span className="grammar-change-label">Original</span>
+                        <p className="grammar-original">
+                          {change.original || "—"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <span className="grammar-change-label">Corrected</span>
+                        <p className="grammar-corrected">
+                          {change.corrected || "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="detail-muted">
+                No specific grammar changes were recorded for this session.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Improvement suggestions */}
+        <section className="progress-panel detail-report-panel">
+          <div className="progress-panel-heading">
+            <div>
+              <h2>Improvement Suggestions</h2>
+              <p>Areas to focus on in your next practice session.</p>
+            </div>
+            <span className="progress-panel-icon">✦</span>
+          </div>
+
+          <div className="suggestions-list">
+            {getSuggestions(session).map((suggestion, index) => (
+              <div className="suggestion-item" key={index}>
+                <span>✓</span>
+                <p>{suggestion}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="detail-report-footer">
+          <button
+            type="button"
+            className="back-to-history-button"
+            onClick={() => setSelectedSessionId(null)}
+          >
+            ← Back to History
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="progress-page">
@@ -329,7 +661,7 @@ function Progress({
           <div className="progress-panel-heading">
             <div>
               <h2>Practice History</h2>
-              <p>Your recorded voice sessions.</p>
+              <p>Click a session to view its detailed report.</p>
             </div>
           </div>
 
@@ -342,27 +674,62 @@ function Progress({
                     <th>Fluency</th>
                     <th>Grammar</th>
                     <th>Communication</th>
+                    <th>Report</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...practiceHistory].reverse().map((session, index) => (
-                    <tr key={session.id ?? `${session.date}-${index}`}>
-                      <td>{new Date(session.date).toLocaleDateString()}</td>
+                  {[...practiceHistory].map((session, index) => (
+                    <tr
+                      key={session.id ?? `${session.date}-${index}`}
+                      className="practice-history-row"
+                      onClick={() => {
+                        if (session.id) setSelectedSessionId(session.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          session.id &&
+                          (event.key === "Enter" || event.key === " ")
+                        ) {
+                          event.preventDefault();
+                          setSelectedSessionId(session.id);
+                        }
+                      }}
+                      tabIndex={session.id ? 0 : -1}
+                      role={session.id ? "button" : undefined}
+                      aria-label={
+                        session.id
+                          ? `View practice report for ${formatDate(session.date)}`
+                          : undefined
+                      }
+                    >
+                      <td>
+                        <div className="history-date">
+                          {formatDate(session.date)}
+                          <small>{formatTime(session.date)}</small>
+                        </div>
+                      </td>
                       <td>{getScore(session.fluencyScore)}</td>
                       <td>{getScore(session.grammarScore)}</td>
                       <td>{getScore(session.communicationScore)}</td>
+                      <td>
+                        <span className="view-report-label">
+                          View report →
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p>No practice sessions yet. Complete a voice session to begin.</p>
+            <p>
+              No practice sessions yet. Complete a voice session to begin.
+            </p>
           )}
         </div>
       </section>
 
-      {/* Expandable detailed analysis */}
+      {/* Latest speech analysis */}
       <section className="progress-panel speech-details-panel">
         <button
           type="button"
