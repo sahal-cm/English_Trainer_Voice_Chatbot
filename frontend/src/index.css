@@ -1630,3 +1630,257 @@ input:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+
+
+/* ---------- Practice Session Controls ---------- */
+
+.practice-session-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.practice-session-controls .status-message {
+  margin: 0;
+}
+
+.end-practice-button {
+  padding: 8px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.end-practice-button:hover:not(:disabled) {
+  background: #ffe4e6;
+}
+
+/* ---------- Practice Session Summary ---------- */
+
+.session-summary-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(4px);
+}
+
+.session-summary-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: min(85vh, 760px);
+  overflow-y: auto;
+  padding: 26px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #1e293b;
+  box-shadow: 0 20px 60px rgb(15 23 42 / 20%);
+  animation: summaryModalIn 0.2s ease-out;
+}
+
+.session-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.session-summary-heading h2 {
+  margin: 0;
+  color: #243b70;
+  font-size: 21px;
+}
+
+.session-summary-heading p {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.session-summary-heading .summary-eyebrow {
+  margin: 0 0 7px;
+  color: #2563eb;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.session-summary-heading > button {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.summary-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.summary-score-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  background: #f8faff;
+}
+
+.summary-score-card span {
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.summary-score-card strong {
+  color: #3157c8;
+  font-size: 22px;
+}
+
+.summary-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.summary-stat-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 8px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  text-align: center;
+}
+
+.summary-stat-grid strong {
+  color: #334155;
+  font-size: 17px;
+}
+
+.summary-stat-grid span {
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.summary-section {
+  margin-top: 17px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.summary-section h3 {
+  margin: 0 0 10px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.summary-section p,
+.summary-section li {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.summary-section p {
+  margin: 7px 0;
+}
+
+.summary-section ul {
+  padding-left: 19px;
+  margin: 8px 0 0;
+}
+
+.summary-done-button {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 22px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-done-button:hover {
+  background: #1d4ed8;
+}
+
+@keyframes summaryModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Summary Responsive Layout ---------- */
+
+@media (max-width: 480px) {
+  .session-summary-overlay {
+    padding: 12px;
+  }
+
+  .session-summary-modal {
+    max-height: 88vh;
+    padding: 20px 16px;
+  }
+
+  .session-summary-heading h2 {
+    font-size: 18px;
+  }
+
+  .summary-score-grid {
+    gap: 6px;
+  }
+
+  .summary-score-card {
+    padding: 11px 7px;
+  }
+
+  .summary-score-card strong {
+    font-size: 18px;
+  }
+
+  .summary-score-card span {
+    font-size: 9px;
+  }
+
+  .summary-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-summary-modal {
+    animation: none;
+  }
+}

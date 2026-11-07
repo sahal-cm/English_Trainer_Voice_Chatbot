@@ -13,6 +13,10 @@ function App() {
 
   const [practiceHistory, setPracticeHistory] = useState([]);
 
+  const [practiceTurnCount, setPracticeTurnCount] = useState(0);
+  const [sessionSummary, setSessionSummary] = useState(null);
+
+
   const [aiMessage, setAiMessage] = useState("Hi! How was your day?");
   const [conversation, setConversation] = useState([
     { role: "ai", text: "Hi! How was your day?" },
@@ -123,19 +127,109 @@ function App() {
 
 
   
-  const savePracticeSession = (data) => {
-    const session = {
+  const addPracticeRecording = (data) => {
+    if (!activePracticeSessionRef.current) {
+      activePracticeSessionRef.current = {
+        startedAt: new Date().toISOString(),
+        recordings: [],
+      };
+    }
+
+    activePracticeSessionRef.current.recordings.push(data);
+    setPracticeTurnCount((count) => count + 1);
+  };
+
+  const endPracticeSession = () => {
+    const activeSession = activePracticeSessionRef.current;
+
+    if (!activeSession || activeSession.recordings.length === 0) return;
+
+    const recordings = activeSession.recordings;
+    const average = (values) => {
+      const validValues = values
+        .map(Number)
+        .filter(Number.isFinite);
+
+      if (validValues.length === 0) return 0;
+
+      return Math.round(
+        validValues.reduce((total, value) => total + value, 0) /
+          validValues.length
+      );
+    };
+
+    const speechResults = recordings.map((item) => item.speech_analysis || {});
+    const grammarResults = recordings.map((item) => item.grammar_analysis || {});
+
+    const totalWords = speechResults.reduce(
+      (total, item) => total + (item.word_count || 0), 0
+    );
+
+    const totalDuration = speechResults.reduce(
+      (total, item) => total + (item.duration_seconds || 0), 0
+    );
+
+    const allFillerWords = speechResults.flatMap(
+      (item) => item.filler_words || []
+    );
+
+    const combinedSpeechAnalysis = {
+      word_count: totalWords,
+      duration_seconds: Number(totalDuration.toFixed(1)),
+      speaking_rate_wpm:
+        totalDuration > 0
+          ? Math.round((totalWords / totalDuration) * 60)
+          : 0,
+      filler_word_count: speechResults.reduce(
+        (total, item) => total + (item.filler_word_count || 0), 0
+      ),
+      filler_words: allFillerWords,
+      pause_count: speechResults.reduce(
+        (total, item) => total + (item.pause_count || 0), 0
+      ),
+      total_pause_seconds: Number(
+        speechResults.reduce(
+          (total, item) => total + (item.total_pause_seconds || 0), 0
+        ).toFixed(1)
+      ),
+      longest_pause_seconds: Math.max(
+        0,
+        ...speechResults.map((item) => item.longest_pause_seconds || 0)
+      ),
+    };
+
+    const combinedGrammarAnalysis = {
+      original: grammarResults.map((item) => item.original || "").join("\n"),
+      corrected: grammarResults.map((item) => item.corrected || "").join("\n"),
+      has_errors: grammarResults.some((item) => item.has_errors),
+      grammar_score: average(
+        grammarResults
+          .map((item) => item.grammar_score)
+          .filter((value) => value != null)
+      ),
+      changes: grammarResults.flatMap((item) => item.changes || []),
+    };
+
+    const summary = {
       id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      transcription: data.transcription,
-      fluencyScore: data.fluency_score,
-      grammarScore: data.grammar_analysis?.grammar_score ?? null,
-      communicationScore: data.communication_score,
-      speechAnalysis: data.speech_analysis,
+      date: activeSession.startedAt,
+      endedAt: new Date().toISOString(),
+      utteranceCount: recordings.length,
+      transcription: recordings
+        .map((item) => item.transcription || "")
+        .filter(Boolean)
+        .join(" "),
+      fluencyScore: average(recordings.map((item) => item.fluency_score)),
+      grammarScore: combinedGrammarAnalysis.grammar_score,
+      communicationScore: average(
+        recordings.map((item) => item.communication_score)
+      ),
+      speechAnalysis: combinedSpeechAnalysis,
+      grammarAnalysis: combinedGrammarAnalysis,
     };
 
     setPracticeHistory((previous) => {
-      const updated = [session, ...previous];
+      const updated = [summary, ...previous];
 
       try {
         localStorage.setItem(
@@ -148,14 +242,26 @@ function App() {
 
       return updated;
     });
+
+    setSessionSummary(summary);
+    activePracticeSessionRef.current = null;
+    setPracticeTurnCount(0);
+    setStatus("Practice session completed!");
   };
 
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
+  const activePracticeSessionRef = useRef(null);
+
 
   const startNewConversation = () => {
+
+    if (practiceTurnCount > 0) {
+      setStatus("Please end your current practice session first.");
+      return;
+    } 
     if (isRecording || isSending || isProcessingAudio) return;
 
     const newId = crypto.randomUUID();
@@ -177,6 +283,10 @@ function App() {
 
 
   const openConversation = (item) => {
+    if (practiceTurnCount > 0) {
+      setStatus("Please end your current practice session first.");
+      return;
+    }
     if (isRecording || isSending || isProcessingAudio) return;
 
     setActiveConversationId(item.id);
@@ -235,7 +345,7 @@ function App() {
 
   
   const deleteConversation = (id) => {
-    if (isRecording || isSending || isProcessingAudio) return;
+    if (isRecording || isSending || isProcessingAudio || practiceTurnCount > 0) return;
 
     const item = savedConversations.find(
       (conversation) => conversation.id === id
@@ -381,7 +491,7 @@ function App() {
           setFluencyScore(data.fluency_score);
           setGrammarAnalysis(data.grammar_analysis);
           setCommunicationScore(data.communication_score);
-          savePracticeSession(data);
+          addPracticeRecording(data);
 
           const conversationHistory = [
             ...conversation,
@@ -574,7 +684,7 @@ function App() {
           <button
             className="new-conversation-button"
             onClick={startNewConversation}
-            disabled={isRecording || isSending}
+            disabled={isRecording || isSending || practiceTurnCount > 0}
           >
             <span>＋</span> New Conversation
           </button>
@@ -652,7 +762,7 @@ function App() {
                           }`}
                           onClick={() => openConversation(item)}
                           disabled={
-                            isRecording || isSending || isProcessingAudio
+                            isRecording || isSending || isProcessingAudio || practiceTurnCount > 0
                           }
                           title={item.title}
                         >
@@ -678,7 +788,7 @@ function App() {
                           aria-label={`Delete ${item.title}`}
                           onClick={() => deleteConversation(item.id)}
                           disabled={
-                            isRecording || isSending || isProcessingAudio
+                            isRecording || isSending || isProcessingAudio || practiceTurnCount > 0
                           }
                         >
                           🗑
@@ -792,7 +902,21 @@ function App() {
                   ⌨️ Typing Mode
                 </button>
               </div>
-              <p className="status-message">{status}</p>
+
+              <div className="practice-session-controls">
+                <p className="status-message">{status}</p>
+
+                {practiceTurnCount > 0 && (
+                  <button
+                    type="button"
+                    className="end-practice-button"
+                    onClick={endPracticeSession}
+                    disabled={isRecording || isProcessingAudio || isSending}
+                  >
+                    End Practice
+                  </button>
+                )}
+              </div>
 
               {practiceMode === "typing" && (
                 <form className="message-form" onSubmit={sendTypedMessage}>
@@ -1090,6 +1214,117 @@ function App() {
         aria-label="Close open panel"
         tabIndex={isSidebarOpen || isAnalysisOpen ? 0 : -1}
       />
+
+
+      {sessionSummary && (
+        <div className="session-summary-overlay">
+          <div
+            className="session-summary-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-summary-title"
+          >
+            <div className="session-summary-heading">
+              <div>
+                <p className="summary-eyebrow">PRACTICE COMPLETED</p>
+                <h2 id="session-summary-title">Your Session Summary</h2>
+                <p>Here's how you performed in this session.</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSessionSummary(null)}
+                aria-label="Close summary"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="summary-score-grid">
+              <div className="summary-score-card">
+                <span>Communication</span>
+                <strong>{sessionSummary.communicationScore}/100</strong>
+              </div>
+
+              <div className="summary-score-card">
+                <span>Grammar</span>
+                <strong>{sessionSummary.grammarScore}/100</strong>
+              </div>
+
+              <div className="summary-score-card">
+                <span>Fluency</span>
+                <strong>{sessionSummary.fluencyScore}/100</strong>
+              </div>
+            </div>
+
+            <div className="summary-stat-grid">
+              <div>
+                <strong>{sessionSummary.utteranceCount}</strong>
+                <span>Speaking turns</span>
+              </div>
+              <div>
+                <strong>{sessionSummary.speechAnalysis.word_count}</strong>
+                <span>Words spoken</span>
+              </div>
+              <div>
+                <strong>{sessionSummary.speechAnalysis.speaking_rate_wpm}</strong>
+                <span>Words per minute</span>
+              </div>
+              <div>
+                <strong>{sessionSummary.speechAnalysis.filler_word_count}</strong>
+                <span>Filler words</span>
+              </div>
+            </div>
+
+            <div className="summary-section">
+              <h3>Grammar Review</h3>
+              <p>{sessionSummary.grammarAnalysis.corrected}</p>
+
+              {sessionSummary.grammarAnalysis.changes.length > 0 && (
+                <ul>
+                  {sessionSummary.grammarAnalysis.changes.map((change, index) => (
+                    <li key={index}>
+                      “{change.original}” → “{change.corrected}”
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {sessionSummary.grammarAnalysis.changes.length === 0 && (
+                <p>No grammar changes were detected. Good work!</p>
+              )}
+            </div>
+
+            <div className="summary-section">
+              <h3>Things to Practise</h3>
+              <ul>
+                {sessionSummary.fluencyScore < 70 && (
+                  <li>Practise speaking more smoothly and maintaining a steady pace.</li>
+                )}
+                {sessionSummary.grammarScore < 70 && (
+                  <li>Focus on sentence structure and grammar accuracy.</li>
+                )}
+                {sessionSummary.speechAnalysis.filler_word_count > 3 && (
+                  <li>Try reducing filler words by pausing briefly before speaking.</li>
+                )}
+                {sessionSummary.fluencyScore >= 70 &&
+                  sessionSummary.grammarScore >= 70 &&
+                  sessionSummary.speechAnalysis.filler_word_count <= 3 && (
+                    <li>Keep practising to maintain your progress.</li>
+                  )}
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              className="summary-done-button"
+              onClick={() => setSessionSummary(null)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       
       {copyNotification && (
